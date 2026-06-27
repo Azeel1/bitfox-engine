@@ -30,9 +30,9 @@ jobs:
         working-directory: engine
         run: cargo build --release --locked
 
-      - name: Test release
+      - name: Test
         working-directory: engine
-        run: cargo test --release --locked
+        run: cargo test --locked
 
       - name: Clippy
         working-directory: engine
