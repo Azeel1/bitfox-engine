@@ -1,0 +1,16 @@
+[package]
+name = "bitfox-convert"
+version = "0.1.0"
+edition = "2021"
+description = "Convert bitfox datagen text (fen | score | wdl) into bulletformat .data for Bullet"
+authors = ["Bitfox Team"]
+
+[[bin]]
+name = "convert"
+path = "src/main.rs"
+
+[dependencies]
+bulletformat = "1.8"
+
+[profile.release]
+opt-level = 3

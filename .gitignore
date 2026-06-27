@@ -1,0 +1,40 @@
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Rust / Cargo
+/engine/target/
+**/target/
+**/*.rs.bk
+
+# GUI native build output
+/build/
+
+# Neural nets (the active engine net is force-added; everything else stays out)
+*.nnue
+/data/nnue/
+/networks/
+
+# Training data and checkpoints (large, generated)
+/trainer/data/
+/trainer/checkpoints/
+*.data
+/engine/data.txt
+
+# Local configs and scratch
+/config.json
+/engine/config.json
+image.png
+
+__pycache__/
+*.pyc
+
+/tmp/
+cache/
+*.log
+*.tmp
+*.prof
+*.trace

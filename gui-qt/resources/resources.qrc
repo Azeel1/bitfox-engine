@@ -1,0 +1,24 @@
+<RCC>
+    <qresource prefix="/">
+        <file>style.qss</file>
+        <file alias="pieces/white_pawn.png">../../assets/images/imgs-128px/white_pawn.png</file>
+        <file alias="pieces/white_knight.png">../../assets/images/imgs-128px/white_knight.png</file>
+        <file alias="pieces/white_bishop.png">../../assets/images/imgs-128px/white_bishop.png</file>
+        <file alias="pieces/white_rook.png">../../assets/images/imgs-128px/white_rook.png</file>
+        <file alias="pieces/white_queen.png">../../assets/images/imgs-128px/white_queen.png</file>
+        <file alias="pieces/white_king.png">../../assets/images/imgs-128px/white_king.png</file>
+        <file alias="pieces/black_pawn.png">../../assets/images/imgs-128px/black_pawn.png</file>
+        <file alias="pieces/black_knight.png">../../assets/images/imgs-128px/black_knight.png</file>
+        <file alias="pieces/black_bishop.png">../../assets/images/imgs-128px/black_bishop.png</file>
+        <file alias="pieces/black_rook.png">../../assets/images/imgs-128px/black_rook.png</file>
+        <file alias="pieces/black_queen.png">../../assets/images/imgs-128px/black_queen.png</file>
+        <file alias="pieces/black_king.png">../../assets/images/imgs-128px/black_king.png</file>
+        <file alias="sounds/move.wav">sounds/move-self.wav</file>
+        <file alias="sounds/capture.wav">sounds/capture.wav</file>
+        <file alias="sounds/castle.wav">sounds/castle.wav</file>
+        <file alias="sounds/check.wav">sounds/move-check.wav</file>
+        <file alias="sounds/promote.wav">sounds/promote.wav</file>
+        <file alias="sounds/end.wav">sounds/game-end.wav</file>
+        <file alias="sounds/illegal.wav">sounds/illegal.wav</file>
+    </qresource>
+</RCC>

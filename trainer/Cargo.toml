@@ -1,0 +1,23 @@
+[package]
+name = "bitfox-trainer"
+version = "0.1.0"
+edition = "2021"
+description = "NNUE training pipeline for the bitfox chess engine, built on Bullet"
+authors = ["Bitfox Team"]
+
+[[bin]]
+name = "train"
+path = "src/train.rs"
+
+[features]
+default = ["metal"]
+metal = ["bullet_lib/metal"]
+cuda = ["bullet_lib/cuda"]
+
+[dependencies]
+bullet_lib = { git = "https://github.com/jw1912/bullet", branch = "main", default-features = false }
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
