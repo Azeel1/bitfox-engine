@@ -39,14 +39,17 @@ clippy:
 
 clean:
 	cd $(ENGINE) && cargo clean
+	rm -rf gui-qt/build build
 
 help:
 	@echo "release  build the optimized engine binary (strongest net)"
+	@echo "build    debug build"
 	@echo "test     run the perft + correctness suite"
 	@echo "perft    perft(6) from startpos"
+	@echo "divide   perft divide at the root"
 	@echo "run      start the engine in UCI mode"
 	@echo "windows  cross-compile the Windows engine binary (bitfox.exe)"
 	@echo "version  print the current engine version"
 	@echo "fmt      cargo fmt"
 	@echo "clippy   cargo clippy (deny warnings)"
-	@echo "clean    remove build artifacts"
+	@echo "clean    remove engine, Qt, and native build artifacts"

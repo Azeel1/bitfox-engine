@@ -16,6 +16,48 @@ builds a shared library used by the desktop board.
   <img src="assets/img/screenshot.png" alt="Bitfox desktop board" width="720">
 </p>
 
+## Requirements
+
+- Rust stable >= 1.85
+- Qt 6
+- CMake >= 3.21
+- Native C++ build tools for your platform
+
+## Build
+
+Build the engine:
+
+```sh
+cd engine && cargo build --release
+```
+
+The optimized UCI binary is written to `engine/target/release/bitfox`. The same
+build also produces the shared engine core used by the desktop board.
+
+Build the Qt board:
+
+```sh
+cmake -S gui-qt -B gui-qt/build -DCMAKE_BUILD_TYPE=Release
+cmake --build gui-qt/build --parallel
+./gui-qt/build/bitfox-board
+```
+
+On multi-config generators (Visual Studio / Xcode):
+
+```sh
+cmake --build gui-qt/build --config Release
+```
+
+## Release
+
+Use the release profile for both the engine and the board:
+
+```sh
+make release
+cmake -S gui-qt -B gui-qt/build -DCMAKE_BUILD_TYPE=Release
+cmake --build gui-qt/build --parallel
+```
+
 ## Status
 
 The engine currently has:
@@ -40,23 +82,6 @@ Strength changes are checked with node-limited self-play
 (`tools/selfplay.py`) and an SPRT stop. For a rough external reference, Bitfox
 is also tested against Stockfish at fixed `UCI_Elo` levels under fast time
 controls. Public CCRL/CEGT ratings are not part of the release process yet.
-
-## Build
-
-Requires Rust stable (>= 1.85).
-
-```sh
-make release          # cargo build --release in engine/
-```
-
-Or directly:
-
-```sh
-cd engine && cargo build --release
-```
-
-The optimized binary is written to `engine/target/release/bitfox`. The same
-build also produces a `cdylib` (`libbitfox.dylib`/`.so`/`.dll`) used by the GUI.
 
 ## Repository layout
 
@@ -164,25 +189,26 @@ go depth 12
 | `Hash`    | spin | 64      | 1-4096   | Transposition table size in MB       |
 | `Threads` | spin | 1       | 1-256    | LazySMP search threads               |
 
-Bitfox is an engine, not a standalone program; pair it with any UCI interface
-such as Cute Chess, En Croissant, or Nibbler, or use the bundled board below.
+The `bitfox` binary speaks UCI; pair it with Cute Chess, En Croissant, Nibbler,
+or any other UCI-compatible interface. The bundled Qt board below is the desktop
+interface shown in the screenshot.
 
-## GUI
+## Qt Board
 
 The Qt board in `gui-qt/` is the desktop interface shown above. It builds the
 Rust engine core as part of the CMake build:
 
 ```sh
-cmake -S gui-qt -B gui-qt/build
-cmake --build gui-qt/build -j
+cmake -S gui-qt -B gui-qt/build -DCMAKE_BUILD_TYPE=Release
+cmake --build gui-qt/build --parallel
 ./gui-qt/build/bitfox-board
 ```
 
 ## Self-play strength gate
 
 `tools/selfplay.py` plays paired, node-limited games between two engine binaries
-and reports score, Elo error bars, LOS, and an SPRT verdict - the gate every
-change is measured against:
+and reports score, Elo error bars, LOS, and an SPRT verdict. Use it as the
+strength gate for strength-affecting changes:
 
 ```sh
 python3 tools/selfplay.py BASELINE engine/target/release/bitfox --games 400
@@ -197,9 +223,11 @@ test      run the perft + correctness suite
 perft     perft(6) from startpos
 divide    perft divide at the root
 run       start the engine in UCI mode
+windows   cross-compile the Windows engine binary
+version   print the current engine version
 fmt       cargo fmt
 clippy    cargo clippy (deny warnings)
-clean     remove build artifacts
+clean     remove engine, Qt, and native build artifacts
 ```
 
 ## Contributing

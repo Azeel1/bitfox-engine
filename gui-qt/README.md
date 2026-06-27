@@ -6,16 +6,18 @@ list, captured-piece tray, and undo/redo.
 
 ## Requirements
 
+- Rust stable >= 1.85
 - Qt 6 (Widgets, Multimedia)
 - CMake 3.21+ and a C++17 compiler
-- The engine core library (`libbitfox`), produced by `cargo build --release` in
-  `engine/`
+
+The CMake build runs `cargo build --release` in `engine/` and links the board
+against the produced `libbitfox` engine core.
 
 ## Build
 
 ```sh
-cmake -S . -B build
-cmake --build build -j
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
 ```
 
 The binary is `build/bitfox-board`.

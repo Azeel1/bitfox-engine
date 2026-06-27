@@ -12,12 +12,18 @@ qt_standard_project_setup()
 set(ENGINE_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/target/release"
     CACHE PATH "Directory containing the engine core library (libbitfox)")
 get_filename_component(ENGINE_LIB_DIR_REAL "${ENGINE_LIB_DIR}" REALPATH)
-set(BITFOX_CORE "${ENGINE_LIB_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}bitfox${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(BITFOX_CORE "${ENGINE_LIB_DIR_REAL}/${CMAKE_SHARED_LIBRARY_PREFIX}bitfox${CMAKE_SHARED_LIBRARY_SUFFIX}")
+
 add_custom_target(bitfox-core
     COMMAND cargo build --release
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../engine"
     COMMENT "Building Bitfox engine core"
     VERBATIM)
+
+add_library(bitfox_core SHARED IMPORTED GLOBAL)
+set_target_properties(bitfox_core PROPERTIES
+    IMPORTED_LOCATION "${BITFOX_CORE}"
+)
 
 qt_add_executable(bitfox-board
     src/main.cpp
@@ -34,10 +40,19 @@ qt_add_executable(bitfox-board
     resources/resources.qrc
 )
 
-target_include_directories(bitfox-board PRIVATE src include)
-target_link_libraries(bitfox-board PRIVATE Qt6::Widgets Qt6::Multimedia)
-target_link_libraries(bitfox-board PRIVATE "${BITFOX_CORE}")
+target_include_directories(bitfox-board PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+)
+
+target_link_libraries(bitfox-board PRIVATE
+    Qt6::Widgets
+    Qt6::Multimedia
+    bitfox_core
+)
+
 add_dependencies(bitfox-board bitfox-core)
+
 set_target_properties(bitfox-board PROPERTIES
     BUILD_RPATH "@loader_path;${ENGINE_LIB_DIR}"
     INSTALL_RPATH "@loader_path")

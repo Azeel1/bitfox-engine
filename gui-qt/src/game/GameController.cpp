@@ -397,10 +397,6 @@ void GameController::setPremove(int from, int to, int promo) {
 }
 
 void GameController::clearPremove() {
-    if (m_premoves.isEmpty()) {
-        m_pmBoard.setFen(m_board.fen());
-        return;
-    }
     m_premoves.clear();
     m_pmBoard.setFen(m_board.fen());
     emit premovesChanged({});
@@ -563,6 +559,10 @@ void GameController::continueGame() {
             Premove pm = m_premoves.first();
             if (m_board.legalTo(pm.from).contains(pm.to)) {
                 m_premoves.removeFirst();
+                if (m_premoves.isEmpty()) {
+                    m_pmBoard.setFen(m_board.fen());
+                    emit premovesChanged({});
+                }
                 applyMove(pm.from, pm.to, pm.promo, false);
                 return;
             }
