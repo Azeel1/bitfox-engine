@@ -1,0 +1,88 @@
+name: Windows GUI Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - windows-gui-package
+
+permissions:
+  contents: read
+
+jobs:
+  windows-gui:
+    name: Windows GUI / x86_64
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Build board
+        shell: pwsh
+        run: |
+          cmake -S gui-qt -B gui-qt/build-windows -DCMAKE_BUILD_TYPE=Release
+          cmake --build gui-qt/build-windows --config Release --parallel
+
+      - name: Package board
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "1.1.0"
+          $buildDir = "gui-qt/build-windows/Release"
+          $distRoot = "dist"
+          $dist = "$distRoot/Bitfox"
+          New-Item -ItemType Directory -Force -Path "$dist/engines" | Out-Null
+
+          Copy-Item "$buildDir/bitfox-board.exe" "$dist/"
+          Copy-Item "$buildDir/bitfox.dll" "$dist/"
+          Copy-Item "engine/target/release/bitfox.exe" "$dist/engines/Bitfox $version.exe"
+
+          windeployqt --release --compiler-runtime --no-translations "$dist/bitfox-board.exe"
+
+          $uci = "uci`nisready`nquit`n" | & "$dist/engines/Bitfox $version.exe"
+          $uci | Write-Output
+          if (($uci -join "`n") -notmatch "uciok" -or ($uci -join "`n") -notmatch "readyok") {
+            throw "Bundled engine failed UCI smoke test"
+          }
+
+          $boardExe = (Resolve-Path "$dist/bitfox-board.exe").Path
+          $boardDir = (Resolve-Path "$dist").Path
+          $process = Start-Process -FilePath $boardExe -WorkingDirectory $boardDir -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            if ($process.HasExited) {
+              throw "Packaged board exited during smoke test"
+            }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+          $zip = "$distRoot/bitfox-$version-windows-x86_64-gui.zip"
+          Compress-Archive -Path "$dist" -DestinationPath $zip -Force
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256" -NoNewline
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-windows-x86_64-gui
+          path: |
+            dist/bitfox-1.1.0-windows-x86_64-gui.zip
+            dist/bitfox-1.1.0-windows-x86_64-gui.zip.sha256
