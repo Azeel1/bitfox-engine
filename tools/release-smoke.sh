@@ -138,6 +138,34 @@ run_docker_uci() {
         '
 }
 
+run_docker_wine_uci() {
+    local label="$1"
+    local dir="$2"
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "docker is required for ${label} UCI smoke" >&2
+        exit 1
+    fi
+    echo "uci smoke ${label}"
+    docker run --rm --platform linux/amd64 \
+        -v "${dir}:/release:ro" \
+        -w /release \
+        debian:bookworm-slim \
+        sh -lc '
+            set -eu
+            apt-get update >/dev/null
+            apt-get install -y --no-install-recommends wine ca-certificates >/dev/null
+            out="$(printf "uci\nisready\nposition startpos\ngo depth 1\nquit\n" |
+                WINEDEBUG=-all timeout 60s wine ./bitfox.exe 2>/tmp/wine.err)" || {
+                cat /tmp/wine.err >&2
+                exit 1
+            }
+            echo "$out"
+            echo "$out" | grep -q "^uciok$"
+            echo "$out" | grep -q "^readyok$"
+            echo "$out" | grep -Eq "^bestmove [a-h][1-8][a-h][1-8][nbrq]?"
+        '
+}
+
 for asset in "${assets[@]}"; do
     download "$asset"
 done
@@ -164,10 +192,7 @@ fi
 if command -v wine >/dev/null 2>&1; then
     run_local_uci "Windows x86_64" wine "${work}/bitfox-${version}-windows-x86_64/bitfox.exe"
 else
-    echo "skip Windows UCI: wine not found"
-    if command -v file >/dev/null 2>&1; then
-        file "${work}/bitfox-${version}-windows-x86_64/bitfox.exe"
-    fi
+    run_docker_wine_uci "Windows x86_64" "${work}/bitfox-${version}-windows-x86_64"
 fi
 
 echo "release smoke ok ${tag}"
