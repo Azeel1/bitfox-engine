@@ -20,7 +20,10 @@ const POSITIONS: &[&str] = &[
 ];
 
 pub fn bench(args: &[String]) {
-    let depth: i32 = args.first().and_then(|s| s.parse().ok()).unwrap_or(DEFAULT_DEPTH);
+    let depth: i32 = args
+        .first()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_DEPTH);
     let mut search = Search::new(16);
     let mut total_nodes = 0u64;
     let start = Instant::now();
@@ -28,7 +31,10 @@ pub fn bench(args: &[String]) {
     for fen in POSITIONS {
         let mut board = Board::from_fen(fen).expect("valid bench fen");
         search.clear();
-        let limits = Limits { depth: Some(depth), ..Default::default() };
+        let limits = Limits {
+            depth: Some(depth),
+            ..Default::default()
+        };
         search.think(&mut board, &limits, false);
         total_nodes += search.node_count();
     }

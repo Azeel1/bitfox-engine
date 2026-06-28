@@ -12,9 +12,10 @@ impl Board {
         let from = m.from();
         let to = m.to();
 
-        let pt = m
-            .promotion()
-            .unwrap_or_else(|| self.piece_on(from).map_or(PieceType::Pawn, |p| p.piece_type()));
+        let pt = m.promotion().unwrap_or_else(|| {
+            self.piece_on(from)
+                .map_or(PieceType::Pawn, |p| p.piece_type())
+        });
 
         let mut occ = self.occupancy();
         occ.clear(from);
@@ -112,7 +113,10 @@ impl Board {
                 break;
             }
 
-            if matches!(attacker, PieceType::Pawn | PieceType::Bishop | PieceType::Queen) {
+            if matches!(
+                attacker,
+                PieceType::Pawn | PieceType::Bishop | PieceType::Queen
+            ) {
                 attackers |= bishop_attacks(to, occ) & bishops;
             }
             if matches!(attacker, PieceType::Rook | PieceType::Queen) {
@@ -128,7 +132,8 @@ impl Board {
         let mut value = if mv.is_en_passant() {
             PieceType::Pawn.see_value()
         } else {
-            self.piece_on(mv.to()).map_or(0, |p| p.piece_type().see_value())
+            self.piece_on(mv.to())
+                .map_or(0, |p| p.piece_type().see_value())
         };
 
         if let Some(promo) = mv.promotion() {

@@ -30,7 +30,11 @@ pub fn divide(args: &[String]) {
     for i in 0..moves.len() {
         let m = moves.moves[i];
         board.make_move(m);
-        let nodes = if depth <= 1 { 1 } else { board.perft(depth - 1) };
+        let nodes = if depth <= 1 {
+            1
+        } else {
+            board.perft(depth - 1)
+        };
         board.unmake_move(m);
         total += nodes;
         println!("{}: {}", m.to_uci(), nodes);

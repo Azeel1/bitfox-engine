@@ -97,10 +97,38 @@ impl Board {
         let targets = !(own | enemy_king);
 
         self.gen_pawns(list, us, occ, opp, enemy_king);
-        self.gen_piece(list, knight_attacks_wrap, self.pieces(us, PieceType::Knight), occ, opp, targets);
-        self.gen_piece(list, bishop_attacks, self.pieces(us, PieceType::Bishop), occ, opp, targets);
-        self.gen_piece(list, rook_attacks, self.pieces(us, PieceType::Rook), occ, opp, targets);
-        self.gen_piece(list, queen_attacks, self.pieces(us, PieceType::Queen), occ, opp, targets);
+        self.gen_piece(
+            list,
+            knight_attacks_wrap,
+            self.pieces(us, PieceType::Knight),
+            occ,
+            opp,
+            targets,
+        );
+        self.gen_piece(
+            list,
+            bishop_attacks,
+            self.pieces(us, PieceType::Bishop),
+            occ,
+            opp,
+            targets,
+        );
+        self.gen_piece(
+            list,
+            rook_attacks,
+            self.pieces(us, PieceType::Rook),
+            occ,
+            opp,
+            targets,
+        );
+        self.gen_piece(
+            list,
+            queen_attacks,
+            self.pieces(us, PieceType::Queen),
+            occ,
+            opp,
+            targets,
+        );
         self.gen_king(list, us, them, occ, opp, targets);
     }
 
@@ -223,7 +251,11 @@ impl Board {
                 && !self.is_attacked(Square::new(3), them)
                 && !self.is_attacked(Square::new(2), them)
             {
-                list.push(Move::new(Square::new(4), Square::new(2), Move::QUEEN_CASTLE));
+                list.push(Move::new(
+                    Square::new(4),
+                    Square::new(2),
+                    Move::QUEEN_CASTLE,
+                ));
             }
         } else {
             if castling.has(crate::types::Castling::BLACK_KING)
@@ -231,7 +263,11 @@ impl Board {
                 && !self.is_attacked(Square::new(61), them)
                 && !self.is_attacked(Square::new(62), them)
             {
-                list.push(Move::new(Square::new(60), Square::new(62), Move::KING_CASTLE));
+                list.push(Move::new(
+                    Square::new(60),
+                    Square::new(62),
+                    Move::KING_CASTLE,
+                ));
             }
             if castling.has(crate::types::Castling::BLACK_QUEEN)
                 && (occ & {
@@ -245,7 +281,11 @@ impl Board {
                 && !self.is_attacked(Square::new(59), them)
                 && !self.is_attacked(Square::new(58), them)
             {
-                list.push(Move::new(Square::new(60), Square::new(58), Move::QUEEN_CASTLE));
+                list.push(Move::new(
+                    Square::new(60),
+                    Square::new(58),
+                    Move::QUEEN_CASTLE,
+                ));
             }
         }
     }

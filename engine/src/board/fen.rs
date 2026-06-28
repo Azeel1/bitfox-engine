@@ -1,6 +1,6 @@
+use super::zobrist;
 use super::Board;
 use crate::types::{Castling, Color, Piece, PieceType, Square};
-use super::zobrist;
 
 impl Board {
     pub fn from_fen(fen: &str) -> Option<Board> {
@@ -50,13 +50,9 @@ impl Board {
             }
         }
 
-        board.ep = parts.next().and_then(|s| {
-            if s == "-" {
-                None
-            } else {
-                Square::from_str(s)
-            }
-        });
+        board.ep = parts
+            .next()
+            .and_then(|s| if s == "-" { None } else { Square::from_str(s) });
 
         board.halfmove = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
         board.fullmove = parts.next().and_then(|s| s.parse().ok()).unwrap_or(1);

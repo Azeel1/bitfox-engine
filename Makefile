@@ -42,7 +42,7 @@ clean:
 	rm -rf gui-qt/build build
 
 help:
-	@echo "release  build the optimized engine binary (strongest net)"
+	@echo "release  build the optimized engine binary and cdylib"
 	@echo "build    debug build"
 	@echo "test     run the perft + correctness suite"
 	@echo "perft    perft(6) from startpos"

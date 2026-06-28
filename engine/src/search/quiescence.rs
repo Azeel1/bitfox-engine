@@ -6,7 +6,13 @@ use crate::types::Move;
 use crate::{is_loss, mated_in, DRAW, INFINITY, MATE_IN_MAX, MAX_PLY};
 
 impl Search {
-    pub(super) fn qsearch(&mut self, board: &mut Board, mut alpha: i32, beta: i32, ply: usize) -> i32 {
+    pub(super) fn qsearch(
+        &mut self,
+        board: &mut Board,
+        mut alpha: i32,
+        beta: i32,
+        ply: usize,
+    ) -> i32 {
         if self.stop {
             return 0;
         }
@@ -45,7 +51,10 @@ impl Search {
         let raw_eval = if in_check {
             0
         } else {
-            probe.as_ref().map(|p| p.eval).unwrap_or_else(|| self.nnue.eval(board))
+            probe
+                .as_ref()
+                .map(|p| p.eval)
+                .unwrap_or_else(|| self.nnue.eval(board))
         };
         let eval = if in_check {
             -INFINITY
@@ -135,9 +144,14 @@ impl Search {
             return mated_in(ply);
         }
 
-        let bound = if best >= beta { Bound::Lower } else { Bound::Upper };
+        let bound = if best >= beta {
+            Bound::Lower
+        } else {
+            Bound::Upper
+        };
         let stored_eval = if in_check { 0 } else { raw_eval };
-        self.tt.store(key, best_move, best, stored_eval, 0, bound, ply);
+        self.tt
+            .store(key, best_move, best, stored_eval, 0, bound, ply);
 
         best
     }

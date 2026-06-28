@@ -38,7 +38,9 @@ fn net() -> &'static Net {
     NET.get_or_init(|| {
         const RAW: &[u8] = include_bytes!("../../networks/bitfox.nnue");
         let read = |off: usize, len: usize| -> Vec<i16> {
-            (0..len).map(|i| i16::from_le_bytes([RAW[off + 2 * i], RAW[off + 2 * i + 1]])).collect()
+            (0..len)
+                .map(|i| i16::from_le_bytes([RAW[off + 2 * i], RAW[off + 2 * i + 1]]))
+                .collect()
         };
 
         let mut o = 0;
@@ -56,7 +58,13 @@ fn net() -> &'static Net {
             *b = BUCKET_LAYOUT[(idx / 8) * 4 + MIRROR[idx % 8]];
         }
 
-        Net { l0w, l0b, l1w, l1b, buckets }
+        Net {
+            l0w,
+            l0b,
+            l1w,
+            l1b,
+            buckets,
+        }
     })
 }
 
@@ -121,7 +129,12 @@ impl Persp {
         let orient = if pov == Color::White { 0 } else { 56 };
         let king = board.king_sq(pov).index() ^ orient;
         let flip = if king & 7 > 3 { 7 } else { 0 };
-        Persp { pov, orient, flip, bucket: net().buckets[king] }
+        Persp {
+            pov,
+            orient,
+            flip,
+            bucket: net().buckets[king],
+        }
     }
 
     #[inline]
@@ -156,7 +169,8 @@ fn forward(white: &[i16; HL], black: &[i16; HL], board: &Board) -> i32 {
         Color::Black => (black, white),
     };
 
-    let bucket = ((board.occupancy().count() as i32 - 2) / 4).clamp(0, OUTPUT_BUCKETS as i32 - 1) as usize;
+    let bucket =
+        ((board.occupancy().count() as i32 - 2) / 4).clamp(0, OUTPUT_BUCKETS as i32 - 1) as usize;
     let w = &net.l1w[bucket * 2 * HL..bucket * 2 * HL + 2 * HL];
 
     let mut output = 0i32;
@@ -192,7 +206,14 @@ pub struct Nnue {
 impl Default for Nnue {
     fn default() -> Nnue {
         Nnue {
-            stack: vec![Accumulator { white: [0; HL], black: [0; HL] }; MAX_PLY + 8].into_boxed_slice(),
+            stack: vec![
+                Accumulator {
+                    white: [0; HL],
+                    black: [0; HL]
+                };
+                MAX_PLY + 8
+            ]
+            .into_boxed_slice(),
             idx: 0,
         }
     }
@@ -207,11 +228,21 @@ impl Nnue {
 
     pub fn eval(&self, board: &Board) -> i32 {
         let acc = &self.stack[self.idx];
-        debug_assert_eq!(forward(&acc.white, &acc.black, board), evaluate(board), "incremental accumulator diverged");
+        debug_assert_eq!(
+            forward(&acc.white, &acc.black, board),
+            evaluate(board),
+            "incremental accumulator diverged"
+        );
         forward(&acc.white, &acc.black, board)
     }
 
-    pub fn make(&mut self, board_after: &Board, m: Move, moved: Piece, captured: Option<(Piece, usize)>) {
+    pub fn make(
+        &mut self,
+        board_after: &Board,
+        m: Move,
+        moved: Piece,
+        captured: Option<(Piece, usize)>,
+    ) {
         self.stack[self.idx + 1] = self.stack[self.idx];
         self.idx += 1;
 
@@ -229,7 +260,9 @@ impl Nnue {
         };
 
         for pov in [Color::White, Color::Black] {
-            let refresh = moved.piece_type() == PieceType::King && pov == us && king_bucket_changed(from, to, us);
+            let refresh = moved.piece_type() == PieceType::King
+                && pov == us
+                && king_bucket_changed(from, to, us);
             if refresh {
                 let acc = pov_acc(&mut self.stack[self.idx], pov);
                 refresh_one(acc, board_after, pov);
@@ -243,7 +276,10 @@ impl Nnue {
             add_column(acc, col(p.feature(us, result_pt, to)));
 
             if let Some((cap, csq)) = captured {
-                sub_column(acc, col(p.feature(cap.color(), cap.piece_type().index(), csq)));
+                sub_column(
+                    acc,
+                    col(p.feature(cap.color(), cap.piece_type().index(), csq)),
+                );
             }
             if let Some((rf, rt)) = rook {
                 sub_column(acc, col(p.feature(us, PieceType::Rook.index(), rf)));

@@ -49,8 +49,9 @@ fn startpos_is_balanced() {
     // The starting position is perfectly symmetric, so the evaluation must be
     // identical whichever side is to move (any side-to-move bonus is the same).
     let white_to_move = evaluate(&Board::startpos());
-    let black_to_move =
-        evaluate(&Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1").unwrap());
+    let black_to_move = evaluate(
+        &Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1").unwrap(),
+    );
     assert_eq!(white_to_move, black_to_move);
 }
 
@@ -67,6 +68,11 @@ fn evaluation_is_color_symmetric() {
     for fen in fens {
         let a = evaluate(&Board::from_fen(fen).unwrap());
         let b = evaluate(&Board::from_fen(&mirror_fen(fen)).unwrap());
-        assert_eq!(a, b, "eval not symmetric for {fen} (mirror {})", mirror_fen(fen));
+        assert_eq!(
+            a,
+            b,
+            "eval not symmetric for {fen} (mirror {})",
+            mirror_fen(fen)
+        );
     }
 }

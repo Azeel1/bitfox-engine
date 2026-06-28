@@ -441,21 +441,6 @@ pub unsafe extern "C" fn cc_position_info(ptr: *mut Board, out: *mut PositionInf
     info.in_check = b.in_check(b.side()) as c_int;
 }
 
-#[no_mangle]
-pub extern "C" fn cc_nnue_load(_path: *const c_char) -> c_int {
-    0
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn cc_nnue_eval(ptr: *mut Board) -> c_int {
-    evaluate(board_ref(ptr))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn cc_nnue_eval_scratch(ptr: *mut Board) -> c_int {
-    evaluate(board_ref(ptr))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

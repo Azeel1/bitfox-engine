@@ -19,7 +19,10 @@ struct AtomicEntry {
 
 impl AtomicEntry {
     fn empty() -> AtomicEntry {
-        AtomicEntry { data: AtomicU64::new(0), meta: AtomicU64::new(0) }
+        AtomicEntry {
+            data: AtomicU64::new(0),
+            meta: AtomicU64::new(0),
+        }
     }
 }
 
@@ -39,7 +42,11 @@ pub struct Tt {
 
 impl Tt {
     pub fn new(mb: usize) -> Tt {
-        let mut tt = Tt { entries: Vec::new(), mask: 0, generation: AtomicU8::new(0) };
+        let mut tt = Tt {
+            entries: Vec::new(),
+            mask: 0,
+            generation: AtomicU8::new(0),
+        };
         tt.resize(mb);
         tt
     }
@@ -100,7 +107,16 @@ impl Tt {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn store(&self, key: u64, mv: Move, mut score: i32, eval: i32, depth: i32, bound: Bound, ply: usize) {
+    pub fn store(
+        &self,
+        key: u64,
+        mv: Move,
+        mut score: i32,
+        eval: i32,
+        depth: i32,
+        bound: Bound,
+        ply: usize,
+    ) {
         let key16 = (key >> 48) as u16;
         let e = &self.entries[self.slot(key)];
         let data = e.data.load(Ordering::Relaxed);
@@ -110,8 +126,10 @@ impl Tt {
         let cur_gen = ((meta >> 8) as u8) >> 2;
         let generation = self.generation.load(Ordering::Relaxed);
 
-        let replace =
-            cur_key != key16 || bound == Bound::Exact || cur_gen != generation || depth + 4 > cur_depth as i32;
+        let replace = cur_key != key16
+            || bound == Bound::Exact
+            || cur_gen != generation
+            || depth + 4 > cur_depth as i32;
         if !replace {
             return;
         }
@@ -122,13 +140,18 @@ impl Tt {
             score -= ply as i32;
         }
 
-        let stored_mv = if mv.is_none() && cur_key == key16 { (data >> 32) as u16 } else { mv.raw() };
+        let stored_mv = if mv.is_none() && cur_key == key16 {
+            (data >> 32) as u16
+        } else {
+            mv.raw()
+        };
 
         let new_data = (key16 as u64) << 48
             | (stored_mv as u64) << 32
             | ((score.clamp(-32000, 32000) as i16 as u16) as u64) << 16
             | (eval.clamp(-32000, 32000) as i16 as u16) as u64;
-        let new_meta = (depth + 1).clamp(1, 255) as u64 | (((generation << 2) | bound as u8) as u64) << 8;
+        let new_meta =
+            (depth + 1).clamp(1, 255) as u64 | (((generation << 2) | bound as u8) as u64) << 8;
 
         e.data.store(new_data, Ordering::Relaxed);
         e.meta.store(new_meta, Ordering::Relaxed);

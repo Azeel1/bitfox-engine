@@ -80,7 +80,11 @@ impl Board {
             Bitboard::EMPTY,
         ];
 
-        ThreatCtx { all, threatened, check }
+        ThreatCtx {
+            all,
+            threatened,
+            check,
+        }
     }
 }
 

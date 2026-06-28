@@ -1,6 +1,6 @@
+use super::zobrist;
 use super::{Board, Undo};
 use crate::types::{Castling, Color, Move, Piece, PieceType, Square};
-use super::zobrist;
 
 const fn castle_masks() -> [u8; 64] {
     let mut m = [15u8; 64];

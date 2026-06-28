@@ -5,7 +5,10 @@ use bitfox::types::{Move, Piece, PieceType};
 fn move_info(board: &Board, m: Move) -> (Piece, Option<(Piece, usize)>) {
     let moved = board.piece_on(m.from()).unwrap();
     let captured = if m.is_en_passant() {
-        Some((Piece::new(board.side().flip(), PieceType::Pawn), m.to().index() ^ 8))
+        Some((
+            Piece::new(board.side().flip(), PieceType::Pawn),
+            m.to().index() ^ 8,
+        ))
     } else if m.is_capture() {
         board.piece_on(m.to()).map(|p| (p, m.to().index()))
     } else {

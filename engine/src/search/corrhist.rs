@@ -55,9 +55,18 @@ impl CorrHist {
         let stm = board.side();
         let bucket = board.fiftymove_bucket();
         let (s, b, _) = slot(stm, 0, bucket);
-        apply(&mut self.pawn[s][b][board.pawn_key() as usize & MASK], bonus);
-        apply(&mut self.non_pawn[0][s][b][board.non_pawn_key(Color::White) as usize & MASK], bonus);
-        apply(&mut self.non_pawn[1][s][b][board.non_pawn_key(Color::Black) as usize & MASK], bonus);
+        apply(
+            &mut self.pawn[s][b][board.pawn_key() as usize & MASK],
+            bonus,
+        );
+        apply(
+            &mut self.non_pawn[0][s][b][board.non_pawn_key(Color::White) as usize & MASK],
+            bonus,
+        );
+        apply(
+            &mut self.non_pawn[1][s][b][board.non_pawn_key(Color::Black) as usize & MASK],
+            bonus,
+        );
     }
 }
 

@@ -36,8 +36,7 @@ pub struct Board {
 }
 
 impl Board {
-    pub const START_FEN: &'static str =
-        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    pub const START_FEN: &'static str = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
     pub(super) fn empty() -> Board {
         Board {
@@ -125,9 +124,8 @@ impl Board {
 
     #[inline]
     pub fn has_non_pawn(&self, color: Color) -> bool {
-        (self.color_bb(color)
-            & !(self.by_type(PieceType::Pawn) | self.by_type(PieceType::King)))
-        .any()
+        (self.color_bb(color) & !(self.by_type(PieceType::Pawn) | self.by_type(PieceType::King)))
+            .any()
     }
 
     #[inline]
@@ -211,7 +209,8 @@ impl Board {
         {
             return false;
         }
-        let minors = self.pieces[PieceType::Knight.index()] | self.pieces[PieceType::Bishop.index()];
+        let minors =
+            self.pieces[PieceType::Knight.index()] | self.pieces[PieceType::Bishop.index()];
         minors.count() <= 1
     }
 

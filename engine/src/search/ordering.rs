@@ -34,14 +34,20 @@ impl Search {
                 .unwrap_or(PieceType::Pawn);
             let promo = m.promotion().map(|pt| MVV[pt.index()]).unwrap_or(0);
             let mvv = 800_000 + MVV[victim.index()] * 16 - MVV[attacker.index()] + promo;
-            let piece = board.piece_on(m.from()).map_or(super::PIECE_NONE, |p| p.index());
+            let piece = board
+                .piece_on(m.from())
+                .map_or(super::PIECE_NONE, |p| p.index());
             let noisy = if piece < 12 {
                 self.noisy_get(piece, m.to().index(), victim)
             } else {
                 0
             };
             let scored = mvv + noisy;
-            return if board.see(m, 0) { scored } else { scored - 1_600_000 };
+            return if board.see(m, 0) {
+                scored
+            } else {
+                scored - 1_600_000
+            };
         }
         if m == self.killers[ply][0] {
             return 700_000;
@@ -54,7 +60,9 @@ impl Search {
         let to = m.to();
         let from_th = tc.all.contains(from);
         let to_th = tc.all.contains(to);
-        let piece = board.piece_on(from).map_or(super::PIECE_NONE, |p| p.index());
+        let piece = board
+            .piece_on(from)
+            .map_or(super::PIECE_NONE, |p| p.index());
         let pt = board.piece_on(from).map_or(0, |p| p.piece_type().index());
         let mut score =
             self.history_get(c, from_th, to_th, m) + self.conthist_get(ply, piece, to.index());

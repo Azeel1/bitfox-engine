@@ -159,8 +159,15 @@ pub fn evaluate(board: &Board) -> i32 {
         if bcount > 1 {
             score += DOUBLED * (bcount - 1);
         }
-        let adj = (if f > 0 { file_bb(f - 1) } else { Bitboard::EMPTY })
-            | (if f < 7 { file_bb(f + 1) } else { Bitboard::EMPTY });
+        let adj = (if f > 0 {
+            file_bb(f - 1)
+        } else {
+            Bitboard::EMPTY
+        }) | (if f < 7 {
+            file_bb(f + 1)
+        } else {
+            Bitboard::EMPTY
+        });
         if wcount > 0 && (adj & wp).is_empty() {
             score -= ISOLATED * wcount;
         }
@@ -199,17 +206,39 @@ pub fn evaluate(board: &Board) -> i32 {
         let wf = wk.file() as u32;
         if wk.rank() <= 1 {
             let files = file_bb(wf)
-                | (if wf > 0 { file_bb(wf - 1) } else { Bitboard::EMPTY })
-                | (if wf < 7 { file_bb(wf + 1) } else { Bitboard::EMPTY });
-            let zone = Bitboard((0xFFu64 << ((wk.rank() as u32 + 1) * 8)) | (0xFFu64 << ((wk.rank() as u32 + 2) * 8)));
+                | (if wf > 0 {
+                    file_bb(wf - 1)
+                } else {
+                    Bitboard::EMPTY
+                })
+                | (if wf < 7 {
+                    file_bb(wf + 1)
+                } else {
+                    Bitboard::EMPTY
+                });
+            let zone = Bitboard(
+                (0xFFu64 << ((wk.rank() as u32 + 1) * 8))
+                    | (0xFFu64 << ((wk.rank() as u32 + 2) * 8)),
+            );
             shield += SHIELD * (files & zone & wp).count() as i32;
         }
         let bf = bk.file() as u32;
         if bk.rank() >= 6 {
             let files = file_bb(bf)
-                | (if bf > 0 { file_bb(bf - 1) } else { Bitboard::EMPTY })
-                | (if bf < 7 { file_bb(bf + 1) } else { Bitboard::EMPTY });
-            let zone = Bitboard((0xFFu64 << ((bk.rank() as u32 - 1) * 8)) | (0xFFu64 << ((bk.rank() as u32 - 2) * 8)));
+                | (if bf > 0 {
+                    file_bb(bf - 1)
+                } else {
+                    Bitboard::EMPTY
+                })
+                | (if bf < 7 {
+                    file_bb(bf + 1)
+                } else {
+                    Bitboard::EMPTY
+                });
+            let zone = Bitboard(
+                (0xFFu64 << ((bk.rank() as u32 - 1) * 8))
+                    | (0xFFu64 << ((bk.rank() as u32 - 2) * 8)),
+            );
             shield -= SHIELD * (files & zone & bp).count() as i32;
         }
     }
@@ -222,7 +251,11 @@ pub fn evaluate(board: &Board) -> i32 {
         score -= BISHOP_PAIR;
     }
 
-    let stm = if board.side() == Color::Black { -score } else { score };
+    let stm = if board.side() == Color::Black {
+        -score
+    } else {
+        score
+    };
     stm + TEMPO
 }
 

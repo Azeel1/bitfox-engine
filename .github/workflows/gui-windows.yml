@@ -2,10 +2,12 @@ name: Windows GUI Package
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
-      - windows-gui-package
 
 permissions:
   contents: read
@@ -42,7 +44,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $version = "1.1.0"
+          $versionMatch = Select-String -Path "engine/Cargo.toml" -Pattern '^version\s*=\s*"([^"]+)"' | Select-Object -First 1
+          if (!$versionMatch) {
+            throw "Could not read package version from engine/Cargo.toml"
+          }
+          $version = $versionMatch.Matches[0].Groups[1].Value
           $buildDir = "gui-qt/build-windows/Release"
           $distRoot = "dist"
           $dist = "$distRoot/Bitfox"
@@ -84,5 +90,5 @@ jobs:
         with:
           name: bitfox-windows-x86_64-gui
           path: |
-            dist/bitfox-1.1.0-windows-x86_64-gui.zip
-            dist/bitfox-1.1.0-windows-x86_64-gui.zip.sha256
+            dist/bitfox-*-windows-x86_64-gui.zip
+            dist/bitfox-*-windows-x86_64-gui.zip.sha256
