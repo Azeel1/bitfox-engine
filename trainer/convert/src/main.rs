@@ -8,6 +8,5 @@ fn main() {
         std::process::exit(1);
     }
 
-    bulletformat::convert_from_text::<ChessBoard>(&args[1], &args[2])
-        .expect("conversion failed");
+    bulletformat::convert_from_text::<ChessBoard>(&args[1], &args[2]).expect("conversion failed");
 }

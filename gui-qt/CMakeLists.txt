@@ -1,5 +1,15 @@
 cmake_minimum_required(VERSION 3.21)
-project(BitfoxBoard VERSION 1.1.0 LANGUAGES CXX)
+
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../engine/Cargo.toml" BITFOX_ENGINE_VERSION_LINE
+    REGEX "^version[ ]*=[ ]*\"[^\"]+\"")
+if(NOT BITFOX_ENGINE_VERSION_LINE)
+    message(FATAL_ERROR "Could not read Bitfox version from engine/Cargo.toml")
+endif()
+list(GET BITFOX_ENGINE_VERSION_LINE 0 BITFOX_ENGINE_VERSION_LINE)
+string(REGEX REPLACE "^version[ ]*=[ ]*\"([^\"]+)\".*" "\\1" BITFOX_ENGINE_VERSION
+    "${BITFOX_ENGINE_VERSION_LINE}")
+
+project(BitfoxBoard VERSION "${BITFOX_ENGINE_VERSION}" LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -7,7 +17,9 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
-qt_standard_project_setup()
+if(COMMAND qt_standard_project_setup)
+    qt_standard_project_setup()
+endif()
 
 set(ENGINE_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../engine/target/release"
     CACHE PATH "Directory containing the engine core library (libbitfox)")

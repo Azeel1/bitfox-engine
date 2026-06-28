@@ -1,0 +1,49 @@
+name: macOS GUI Package
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  macos-gui:
+    name: macOS GUI / arm64
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Qt
+        run: |
+          brew install qt ninja
+          qt_prefix="$(brew --prefix qt)"
+          echo "${qt_prefix}/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=${qt_prefix}" >> "$GITHUB_ENV"
+
+      - name: Build board
+        run: |
+          test "$(uname -m)" = "arm64"
+          cmake -S gui-qt -B gui-qt/build-macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build gui-qt/build-macos --parallel
+
+      - name: Package board
+        run: tools/package-macos-gui.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-macos-arm64-gui
+          path: |
+            dist/bitfox-*-macos-arm64-gui.zip
+            dist/bitfox-*-macos-arm64-gui.zip.sha256

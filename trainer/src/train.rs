@@ -1,15 +1,15 @@
 use bullet_lib::{
     game::{
-        inputs::{ChessBucketsMirrored, get_num_buckets},
+        inputs::{get_num_buckets, ChessBucketsMirrored},
         outputs::MaterialCount,
     },
-    nn::{InitSettings, Shape, optimiser::AdamW},
+    nn::{optimiser::AdamW, InitSettings, Shape},
     trainer::{
         save::SavedFormat,
-        schedule::{TrainingSchedule, TrainingSteps, lr, wdl},
+        schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
         settings::LocalSettings,
     },
-    value::{ValueTrainerBuilder, loader::DirectSequentialDataLoader},
+    value::{loader::DirectSequentialDataLoader, ValueTrainerBuilder},
 };
 
 const HL: usize = 768;
@@ -43,12 +43,19 @@ fn main() {
             SavedFormat::id("l0w")
                 .transform(|store, weights| {
                     let factoriser = store.get("l0f").values.f32().repeat(NUM_INPUT_BUCKETS);
-                    weights.into_iter().zip(factoriser).map(|(a, b)| a + b).collect()
+                    weights
+                        .into_iter()
+                        .zip(factoriser)
+                        .map(|(a, b)| a + b)
+                        .collect()
                 })
                 .round()
                 .quantise::<i16>(QA),
             SavedFormat::id("l0b").round().quantise::<i16>(QA),
-            SavedFormat::id("l1w").round().quantise::<i16>(QB).transpose(),
+            SavedFormat::id("l1w")
+                .round()
+                .quantise::<i16>(QB)
+                .transpose(),
             SavedFormat::id("l1b").round().quantise::<i16>(QA * QB),
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
@@ -86,9 +93,17 @@ fn main() {
         save_rate: 2,
     };
 
-    let settings = LocalSettings { threads: 6, test_set: None, output_directory: "checkpoints", batch_queue_size: 32 };
+    let settings = LocalSettings {
+        threads: 6,
+        test_set: None,
+        output_directory: "checkpoints",
+        batch_queue_size: 32,
+    };
     let data_path = "data/bitfox.data";
-    assert!(std::path::Path::new(data_path).exists(), "training data not found: {data_path}");
+    assert!(
+        std::path::Path::new(data_path).exists(),
+        "training data not found: {data_path}"
+    );
     let data_loader = DirectSequentialDataLoader::new(&[data_path]);
 
     trainer.run(&schedule, &settings, &data_loader);
