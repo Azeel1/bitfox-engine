@@ -11,6 +11,11 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 Releases are checked by fixed-node self-play (`tools/selfplay.py`). The version
 in `engine/Cargo.toml` is the version reported over UCI.
 
+## [1.1.1]
+
+### Packaging
+- Added checked GUI package builds for Windows, Linux, and macOS.
+
 ## [1.1.0]
 
 ### Search
