@@ -67,9 +67,13 @@ def copy_source(dst):
         blocked = {
             ".git",
             ".DS_Store",
+            "cache",
+            "config.json",
+            "image.png",
             "target",
             "checkpoints",
             "runs",
+            "tmp",
             "__pycache__",
         }
         rel = Path(path).resolve().relative_to(ROOT)
