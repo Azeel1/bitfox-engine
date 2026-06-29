@@ -8,6 +8,12 @@
 ![Language: Rust](https://img.shields.io/badge/rust-stable-orange.svg)
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)
 
+<p align="center">
+  <a href="https://github.com/Azeel1/bitfox-engine/releases/latest">
+    <img src="https://img.shields.io/badge/download-latest_release-2f7d32?style=for-the-badge" alt="Download latest release">
+  </a>
+</p>
+
 A UCI chess engine written in Rust. It uses a bitboard board, alpha-beta search,
 and an NNUE evaluation trained from its own self-play data. The same crate also
 builds a shared library used by the desktop board.
@@ -15,6 +21,20 @@ builds a shared library used by the desktop board.
 <p align="center">
   <img src="assets/img/screenshot.png" alt="Bitfox desktop board" width="720">
 </p>
+
+## Downloads
+
+Download the latest release from
+[GitHub Releases](https://github.com/Azeel1/bitfox-engine/releases/latest).
+
+| System | Desktop board package |
+| ------ | --------------------- |
+| Windows x86_64 | `bitfox-*-windows-x86_64-gui.zip` |
+| macOS arm64 | `bitfox-*-macos-arm64-gui.zip` |
+| Linux x86_64 | `bitfox-*-linux-x86_64-gui.tar.gz` |
+
+For UCI-only use, choose the matching engine archive without `-gui` in its
+filename.
 
 ## Requirements
 
@@ -50,13 +70,16 @@ cmake --build gui-qt/build --config Release
 
 ## Release
 
-Use the release profile for both the engine and the board:
+Releases are produced by the `Release` workflow in GitHub Actions. Bump the
+version in `engine/Cargo.toml`, update `CHANGELOG.md`, push `main`, then run the
+workflow with the matching tag, such as `v1.1.1`.
 
-```sh
-make release
-cmake -S gui-qt -B gui-qt/build -DCMAKE_BUILD_TYPE=Release
-cmake --build gui-qt/build --parallel
-```
+The workflow builds and checks:
+
+- UCI engine archives for Windows x86_64, Linux x86_64, Linux ARM64, and macOS
+  arm64.
+- Desktop board packages for Windows x86_64, Linux x86_64, and macOS arm64.
+- SHA-256 checksum files for every release asset.
 
 ## Status
 

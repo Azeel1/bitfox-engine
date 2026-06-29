@@ -1,0 +1,491 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag. Leave empty to use v<engine version>."
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    name: Release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: meta
+        env:
+          INPUT_TAG: ${{ github.event.inputs.tag || '' }}
+        run: |
+          set -euo pipefail
+          version="$(awk -F'"' '/^version = / {print $2; exit}' engine/Cargo.toml)"
+          if [[ -z "$version" ]]; then
+            echo "::error::Could not read version from engine/Cargo.toml"
+            exit 1
+          fi
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [[ -n "${INPUT_TAG:-}" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="v${version}"
+          fi
+
+          if [[ "$tag" != "v${version}" ]]; then
+            echo "::error::Release tag ${tag} does not match engine version ${version}"
+            exit 1
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+  engine-linux-x86_64:
+    name: Engine / Linux x86_64
+    runs-on: ubuntu-22.04
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path engine/Cargo.toml
+          pkg="bitfox-${VERSION}-linux-x86_64"
+          mkdir -p "dist/${pkg}"
+          cp engine/target/release/bitfox "dist/${pkg}/bitfox"
+          chmod 755 "dist/${pkg}/bitfox"
+
+          out="$(printf "uci\nisready\nquit\n" | "dist/${pkg}/bitfox")"
+          echo "$out"
+          grep -q "^uciok$" <<<"$out"
+          grep -q "^readyok$" <<<"$out"
+
+          (
+            cd dist
+            tar --sort=name --owner=0 --group=0 --numeric-owner -czf "${pkg}.tar.gz" "$pkg"
+            sha256sum "${pkg}.tar.gz" | awk -v name="${pkg}.tar.gz" '{print $1 "  " name}' > "${pkg}.tar.gz.sha256"
+          )
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-linux-x86_64
+          path: |
+            dist/bitfox-*-linux-x86_64.tar.gz
+            dist/bitfox-*-linux-x86_64.tar.gz.sha256
+
+  engine-linux-aarch64:
+    name: Engine / Linux ARM64
+    runs-on: ubuntu-22.04
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-aarch64-linux-gnu \
+            qemu-user-static
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add aarch64-unknown-linux-gnu
+
+      - name: Build package
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --manifest-path engine/Cargo.toml --target aarch64-unknown-linux-gnu
+          pkg="bitfox-${VERSION}-linux-aarch64"
+          mkdir -p "dist/${pkg}"
+          cp engine/target/aarch64-unknown-linux-gnu/release/bitfox "dist/${pkg}/bitfox"
+          chmod 755 "dist/${pkg}/bitfox"
+
+          out="$(printf "uci\nisready\nquit\n" | qemu-aarch64-static -L /usr/aarch64-linux-gnu "dist/${pkg}/bitfox")"
+          echo "$out"
+          grep -q "^uciok$" <<<"$out"
+          grep -q "^readyok$" <<<"$out"
+
+          (
+            cd dist
+            tar --sort=name --owner=0 --group=0 --numeric-owner -czf "${pkg}.tar.gz" "$pkg"
+            sha256sum "${pkg}.tar.gz" | awk -v name="${pkg}.tar.gz" '{print $1 "  " name}' > "${pkg}.tar.gz.sha256"
+          )
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-linux-aarch64
+          path: |
+            dist/bitfox-*-linux-aarch64.tar.gz
+            dist/bitfox-*-linux-aarch64.tar.gz.sha256
+
+  engine-macos-arm64:
+    name: Engine / macOS arm64
+    runs-on: macos-15
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build package
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "arm64"
+          cargo build --release --locked --manifest-path engine/Cargo.toml
+          pkg="bitfox-${VERSION}-macos-arm64"
+          mkdir -p "dist/${pkg}"
+          cp engine/target/release/bitfox "dist/${pkg}/bitfox"
+          chmod 755 "dist/${pkg}/bitfox"
+
+          out="$(printf "uci\nisready\nquit\n" | "dist/${pkg}/bitfox")"
+          echo "$out"
+          grep -q "^uciok$" <<<"$out"
+          grep -q "^readyok$" <<<"$out"
+
+          (
+            cd dist
+            tar -czf "${pkg}.tar.gz" "$pkg"
+            shasum -a 256 "${pkg}.tar.gz" | awk -v name="${pkg}.tar.gz" '{print $1 "  " name}' > "${pkg}.tar.gz.sha256"
+          )
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-macos-arm64
+          path: |
+            dist/bitfox-*-macos-arm64.tar.gz
+            dist/bitfox-*-macos-arm64.tar.gz.sha256
+
+  engine-windows-x86_64:
+    name: Engine / Windows x86_64
+    runs-on: windows-latest
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          cargo build --release --locked --manifest-path engine/Cargo.toml
+
+          $pkg = "bitfox-$version-windows-x86_64"
+          $dist = "dist/$pkg"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item "engine/target/release/bitfox.exe" "$dist/bitfox.exe"
+
+          $uci = "uci`nisready`nquit`n" | & "$dist/bitfox.exe"
+          $uci | Write-Output
+          if (($uci -join "`n") -notmatch "uciok" -or ($uci -join "`n") -notmatch "readyok") {
+            throw "Windows engine failed UCI smoke test"
+          }
+
+          $zip = "dist/$pkg.zip"
+          Compress-Archive -Path $dist -DestinationPath $zip -Force
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256" -NoNewline
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-windows-x86_64
+          path: |
+            dist/bitfox-*-windows-x86_64.zip
+            dist/bitfox-*-windows-x86_64.zip.sha256
+
+  gui-linux-x86_64:
+    name: GUI / Linux x86_64
+    runs-on: ubuntu-22.04
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            g++ \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0 \
+            libxcb-xkb1 \
+            ninja-build \
+            patchelf \
+            pkg-config \
+            qt6-base-dev \
+            qt6-base-dev-tools \
+            qt6-multimedia-dev \
+            qt6-qpa-plugins
+
+      - name: Build board
+        run: |
+          cmake -S gui-qt -B gui-qt/build-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build gui-qt/build-linux --parallel 2
+
+      - name: Package board
+        run: tools/package-linux-gui.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-linux-x86_64-gui
+          path: |
+            dist/bitfox-*-linux-x86_64-gui.tar.gz
+            dist/bitfox-*-linux-x86_64-gui.tar.gz.sha256
+
+  gui-macos-arm64:
+    name: GUI / macOS arm64
+    runs-on: macos-15
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Qt
+        run: |
+          brew install qt ninja
+          qt_prefix="$(brew --prefix qt)"
+          echo "${qt_prefix}/bin" >> "$GITHUB_PATH"
+          echo "CMAKE_PREFIX_PATH=${qt_prefix}" >> "$GITHUB_ENV"
+
+      - name: Build board
+        run: |
+          test "$(uname -m)" = "arm64"
+          cmake -S gui-qt -B gui-qt/build-macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build gui-qt/build-macos --parallel
+
+      - name: Package board
+        run: tools/package-macos-gui.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-macos-arm64-gui
+          path: |
+            dist/bitfox-*-macos-arm64-gui.zip
+            dist/bitfox-*-macos-arm64-gui.zip.sha256
+
+  gui-windows-x86_64:
+    name: GUI / Windows x86_64
+    runs-on: windows-latest
+    needs: version
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Build board
+        shell: pwsh
+        run: |
+          cmake -S gui-qt -B gui-qt/build-windows -DCMAKE_BUILD_TYPE=Release
+          cmake --build gui-qt/build-windows --config Release --parallel
+
+      - name: Package board
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ needs.version.outputs.version }}"
+          $buildDir = "gui-qt/build-windows/Release"
+          $distRoot = "dist"
+          $dist = "$distRoot/Bitfox"
+          New-Item -ItemType Directory -Force -Path "$dist/engines" | Out-Null
+
+          Copy-Item "$buildDir/bitfox-board.exe" "$dist/"
+          Copy-Item "$buildDir/bitfox.dll" "$dist/"
+          Copy-Item "engine/target/release/bitfox.exe" "$dist/engines/Bitfox $version.exe"
+
+          windeployqt --release --compiler-runtime --no-translations "$dist/bitfox-board.exe"
+
+          $uci = "uci`nisready`nquit`n" | & "$dist/engines/Bitfox $version.exe"
+          $uci | Write-Output
+          if (($uci -join "`n") -notmatch "uciok" -or ($uci -join "`n") -notmatch "readyok") {
+            throw "Bundled engine failed UCI smoke test"
+          }
+
+          $boardExe = (Resolve-Path "$dist/bitfox-board.exe").Path
+          $boardDir = (Resolve-Path "$dist").Path
+          $process = Start-Process -FilePath $boardExe -WorkingDirectory $boardDir -PassThru
+          try {
+            Start-Sleep -Seconds 5
+            if ($process.HasExited) {
+              throw "Packaged board exited during smoke test"
+            }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+          }
+
+          $zip = "$distRoot/bitfox-$version-windows-x86_64-gui.zip"
+          Compress-Archive -Path "$dist" -DestinationPath $zip -Force
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256" -NoNewline
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: bitfox-windows-x86_64-gui
+          path: |
+            dist/bitfox-*-windows-x86_64-gui.zip
+            dist/bitfox-*-windows-x86_64-gui.zip.sha256
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - version
+      - engine-linux-x86_64
+      - engine-linux-aarch64
+      - engine-macos-arm64
+      - engine-windows-x86_64
+      - gui-linux-x86_64
+      - gui-macos-arm64
+      - gui-windows-x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Verify checksums
+        run: |
+          set -euo pipefail
+          while IFS= read -r sha_file; do
+            (
+              cd "$(dirname "$sha_file")"
+              sha256sum -c "$(basename "$sha_file")"
+            )
+          done < <(find release-assets -type f -name "*.sha256" | sort)
+
+      - name: Write release notes
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v version="$VERSION" '
+            $0 == "## [" version "]" {show=1; next}
+            show && /^## \[/ {exit}
+            show {print}
+          ' CHANGELOG.md > release-notes.md
+          if [[ ! -s release-notes.md ]]; then
+            printf "Bitfox %s\n" "$VERSION" > release-notes.md
+          fi
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release ${TAG} already exists"
+            exit 1
+          fi
+          mapfile -t assets < <(find release-assets -type f -name "bitfox-${VERSION}-*" | sort)
+          if [[ "${#assets[@]}" -ne 14 ]]; then
+            printf "Expected 14 release assets, found %s\n" "${#assets[@]}" >&2
+            printf "%s\n" "${assets[@]}" >&2
+            exit 1
+          fi
+          gh release create "$TAG" "${assets[@]}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Bitfox ${VERSION}" \
+            --notes-file release-notes.md
+
+  smoke-release:
+    name: Smoke release
+    runs-on: ubuntu-22.04
+    needs:
+      - version
+      - publish
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Smoke test release
+        run: tools/release-smoke.sh "${{ needs.version.outputs.tag }}"
