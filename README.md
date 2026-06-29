@@ -70,9 +70,11 @@ cmake --build gui-qt/build --config Release
 
 ## Release
 
-Releases are produced by the `Release` workflow in GitHub Actions. Bump the
-version in `engine/Cargo.toml`, update `CHANGELOG.md`, push `main`, then run the
-workflow with the matching tag, such as `v1.1.1`.
+Releases are produced by the `Release` workflow in GitHub Actions. To refresh
+the current release packages, run the workflow again with the existing matching
+tag, such as `v1.1.1`. For a new release, bump the version in
+`engine/Cargo.toml`, update `CHANGELOG.md`, push `main`, then run the workflow
+with the new matching tag.
 
 The workflow builds and checks:
 

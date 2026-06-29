@@ -448,28 +448,34 @@ jobs:
             printf "Bitfox %s\n" "$VERSION" > release-notes.md
           fi
 
-      - name: Create release
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.version.outputs.tag }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "::error::Release ${TAG} already exists"
-            exit 1
-          fi
           mapfile -t assets < <(find release-assets -type f -name "bitfox-${VERSION}-*" | sort)
           if [[ "${#assets[@]}" -ne 14 ]]; then
             printf "Expected 14 release assets, found %s\n" "${#assets[@]}" >&2
             printf "%s\n" "${assets[@]}" >&2
             exit 1
           fi
-          gh release create "$TAG" "${assets[@]}" \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Bitfox ${VERSION}" \
-            --notes-file release-notes.md
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --clobber
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Bitfox ${VERSION}" \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" "${assets[@]}" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Bitfox ${VERSION}" \
+              --notes-file release-notes.md
+          fi
 
   smoke-release:
     name: Smoke release
