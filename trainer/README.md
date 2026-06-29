@@ -61,3 +61,34 @@ CUDA_PATH=/usr/local/cuda cargo run --release --no-default-features --features c
 
 Set `batches_per_superbatch` to about `positions / 16384` for one epoch per
 superbatch, then size `end_superbatch` to the epochs you want.
+
+## Experiments
+
+Use `experiment.py` to keep generated data, checkpoints, exported networks, and
+match logs under one run directory:
+
+```sh
+python3 trainer/experiment.py gen1 \
+  --positions 2000000 \
+  --nodes 10000 \
+  --superbatches 8 \
+  --batches-per-superbatch 1000 \
+  --games 400 \
+  --match-nodes 20000
+```
+
+The script writes to `trainer/runs/<name>/`, exports
+`trainer/runs/<name>/networks/<name>.nnue`, builds a temporary candidate engine
+with that network, then runs the self-play gate against the current engine.
+
+To test an existing network without regenerating data:
+
+```sh
+python3 trainer/experiment.py gen1-test \
+  --skip-datagen \
+  --skip-convert \
+  --skip-train \
+  --network trainer/runs/gen1/networks/gen1.nnue \
+  --games 400 \
+  --match-nodes 20000
+```

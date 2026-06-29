@@ -21,6 +21,7 @@
 # Training data and checkpoints (large, generated)
 /trainer/data/
 /trainer/checkpoints/
+/trainer/runs/
 *.data
 /engine/data.txt
 
