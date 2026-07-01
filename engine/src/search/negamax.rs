@@ -80,7 +80,7 @@ impl Search {
         let correction = if in_check {
             0
         } else {
-            self.corrhist.value(board)
+            (self.corrhist.value(board) + self.contcorr_get(ply)) / 64
         };
         let static_eval = if in_check {
             0
@@ -111,6 +111,8 @@ impl Search {
             }
             if depth >= 3 && static_eval >= beta && board.has_non_pawn(us) {
                 let r = 3 + depth / 4 + ((static_eval - beta) / 200).min(3);
+                self.ss_piece[ply] = PIECE_NONE;
+                self.ss_to[ply] = 0;
                 board.make_null();
                 let score = -self.negamax(board, -beta, -beta + 1, depth - r, ply + 1);
                 board.unmake_null();
@@ -409,6 +411,7 @@ impl Search {
             || (bound == Bound::Lower && best <= static_eval);
         if !skip_corr {
             self.corrhist.update(board, depth, best - static_eval);
+            self.contcorr_update(ply, depth, best - static_eval);
         }
 
         if !is_excluded {

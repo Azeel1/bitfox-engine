@@ -59,7 +59,8 @@ impl Search {
         let eval = if in_check {
             -INFINITY
         } else {
-            (raw_eval + self.corrhist.value(board)).clamp(-(MATE_IN_MAX - 1), MATE_IN_MAX - 1)
+            let correction = (self.corrhist.value(board) + self.contcorr_get(ply)) / 64;
+            (raw_eval + correction).clamp(-(MATE_IN_MAX - 1), MATE_IN_MAX - 1)
         };
 
         let mut best = eval;
@@ -121,6 +122,8 @@ impl Search {
             }
             legal += 1;
             self.nnue.make(board, m, moved, captured);
+            self.ss_piece[ply] = moved.index();
+            self.ss_to[ply] = m.to().index();
             let score = -self.qsearch(board, -beta, -alpha, ply + 1);
             board.unmake_move(m);
             self.nnue.unmake();

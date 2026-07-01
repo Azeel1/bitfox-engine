@@ -47,7 +47,7 @@ impl CorrHist {
         let pawn = self.pawn[s][b][board.pawn_key() as usize & MASK] as i32;
         let npw = self.non_pawn[0][s][b][board.non_pawn_key(Color::White) as usize & MASK] as i32;
         let npb = self.non_pawn[1][s][b][board.non_pawn_key(Color::Black) as usize & MASK] as i32;
-        (pawn + npw + npb) / 64
+        pawn + npw + npb
     }
 
     pub fn update(&mut self, board: &Board, depth: i32, diff: i32) {

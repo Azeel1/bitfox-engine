@@ -28,8 +28,12 @@ pub type QuietHist = [[[[[i32; 64]; 64]; 2]; 2]; 2];
 // [moved_piece][to][captured_type]
 pub type NoisyHist = [[[i16; 6]; 64]; 12];
 
+// [prev2_piece][prev2_to][prev1_piece][prev1_to]
+pub type ContCorr = [[[[i16; 64]; 13]; 64]; 13];
+
 const HIST_MAX: i32 = 16384;
 const NOISY_MAX: i32 = 12800;
+const CONTCORR_MAX: i32 = 16418;
 
 pub struct Search {
     tt: Arc<Tt>,
@@ -42,6 +46,7 @@ pub struct Search {
     history: Box<QuietHist>,
     noisy_hist: Box<NoisyHist>,
     cont_hist: Box<ContHist>,
+    cont_corr: Box<ContCorr>,
     corrhist: corrhist::CorrHist,
     ss_eval: Box<[i32; MAX_PLY + 4]>,
     ss_piece: [usize; MAX_PLY + 4],
@@ -93,6 +98,7 @@ impl Search {
             history: zeroed_box(),
             noisy_hist: zeroed_box(),
             cont_hist: zeroed_box(),
+            cont_corr: zeroed_box(),
             corrhist: corrhist::CorrHist::default(),
             ss_eval: Box::new([crate::SCORE_NONE; MAX_PLY + 4]),
             ss_piece: [PIECE_NONE; MAX_PLY + 4],
@@ -120,6 +126,7 @@ impl Search {
         self.history = zeroed_box();
         self.noisy_hist = zeroed_box();
         self.cont_hist = zeroed_box();
+        self.cont_corr = zeroed_box();
         self.corrhist.clear();
     }
 

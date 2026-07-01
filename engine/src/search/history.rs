@@ -1,4 +1,4 @@
-use super::{Search, HIST_MAX, NOISY_MAX};
+use super::{Search, CONTCORR_MAX, HIST_MAX, NOISY_MAX, PIECE_NONE};
 use crate::types::{Color, Move, PieceType};
 
 impl Search {
@@ -55,6 +55,40 @@ impl Search {
             }
         }
         score
+    }
+
+    pub(super) fn contcorr_get(&self, ply: usize) -> i32 {
+        let mut sum = 0;
+        if ply >= 2 && self.ss_piece[ply - 1] != PIECE_NONE {
+            let p1 = self.ss_piece[ply - 1];
+            let t1 = self.ss_to[ply - 1];
+            for offset in [2usize, 4] {
+                if ply >= offset && self.ss_piece[ply - offset] != PIECE_NONE {
+                    let pp = self.ss_piece[ply - offset];
+                    let pt = self.ss_to[ply - offset];
+                    sum += self.cont_corr[pp][pt][p1][t1] as i32;
+                }
+            }
+        }
+        sum
+    }
+
+    pub(super) fn contcorr_update(&mut self, ply: usize, depth: i32, diff: i32) {
+        if ply < 2 || self.ss_piece[ply - 1] == PIECE_NONE {
+            return;
+        }
+        let bonus = (148 * depth * diff / 128).clamp(-4678, 2496);
+        let p1 = self.ss_piece[ply - 1];
+        let t1 = self.ss_to[ply - 1];
+        for offset in [2usize, 4] {
+            if ply >= offset && self.ss_piece[ply - offset] != PIECE_NONE {
+                let pp = self.ss_piece[ply - offset];
+                let pt = self.ss_to[ply - offset];
+                let e = &mut self.cont_corr[pp][pt][p1][t1];
+                let v = *e as i32;
+                *e = (v + bonus - bonus.abs() * v / CONTCORR_MAX) as i16;
+            }
+        }
     }
 
     pub(super) fn update_conthist(&mut self, ply: usize, piece: usize, to: usize, bonus: i32) {
