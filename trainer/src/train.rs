@@ -13,7 +13,6 @@ use bullet_lib::{
 };
 use std::env;
 
-const HL: usize = 768;
 const SCALE: i32 = 400;
 const QA: i16 = 255;
 const QB: i16 = 64;
@@ -46,6 +45,7 @@ fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
 }
 
 fn main() {
+    let hl = env_parse("BITFOX_TRAIN_HL", 768);
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
         .optimiser(AdamW)
@@ -72,13 +72,13 @@ fn main() {
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
-            let l0f = builder.new_weights("l0f", Shape::new(HL, 768), InitSettings::Zeroed);
+            let l0f = builder.new_weights("l0f", Shape::new(hl, 768), InitSettings::Zeroed);
             let expanded = l0f.repeat(NUM_INPUT_BUCKETS);
 
-            let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, HL);
+            let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl);
             l0.weights = l0.weights + expanded;
 
-            let l1 = builder.new_affine("l1", 2 * HL, NUM_OUTPUT_BUCKETS);
+            let l1 = builder.new_affine("l1", 2 * hl, NUM_OUTPUT_BUCKETS);
 
             let stm_hidden = l0.forward(stm_inputs).screlu();
             let ntm_hidden = l0.forward(ntm_inputs).screlu();
