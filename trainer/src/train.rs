@@ -89,6 +89,9 @@ fn main() {
     let net_id = env_string("BITFOX_TRAIN_ID", "bitfox");
     let data_path = env_string("BITFOX_TRAIN_DATA", "data/bitfox.data");
     let output_directory = env_string("BITFOX_TRAIN_OUTPUT", "checkpoints");
+    let resume_checkpoint = env::var("BITFOX_TRAIN_RESUME")
+        .ok()
+        .filter(|value| !value.is_empty());
     let threads = env_parse("BITFOX_TRAIN_THREADS", 6);
     let superbatches = env_parse("BITFOX_TRAIN_SUPERBATCHES", 8);
     let batches_per_superbatch = env_parse("BITFOX_TRAIN_BATCHES_PER_SUPERBATCH", 1000);
@@ -122,11 +125,26 @@ fn main() {
         output_directory: output_directory.as_str(),
         batch_queue_size: 32,
     };
-    assert!(
-        std::path::Path::new(&data_path).exists(),
-        "training data not found: {data_path}"
-    );
-    let data_loader = DirectSequentialDataLoader::new(&[data_path.as_str()]);
+    let data_paths = env::split_paths(&data_path)
+        .map(|path| path.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
+    for path in &data_paths {
+        assert!(
+            std::path::Path::new(path).exists(),
+            "training data not found: {path}"
+        );
+    }
+    let data_path_refs = data_paths.iter().map(String::as_str).collect::<Vec<_>>();
+    let data_loader = DirectSequentialDataLoader::new(&data_path_refs);
+
+    if let Some(path) = resume_checkpoint {
+        assert!(
+            std::path::Path::new(&path).exists(),
+            "resume checkpoint not found: {path}"
+        );
+        println!("Resuming from checkpoint: {path}");
+        trainer.load_from_checkpoint(&path);
+    }
 
     trainer.run(&schedule, &settings, &data_loader);
 }

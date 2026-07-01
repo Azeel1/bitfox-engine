@@ -120,6 +120,7 @@ def parse_args():
     ap.add_argument("--run-root", default=str(TRAINER / "runs"))
     ap.add_argument("--data-text")
     ap.add_argument("--data-bin")
+    ap.add_argument("--extra-data-bin", action="append", default=[])
     ap.add_argument("--network")
     ap.add_argument("--skip-datagen", action="store_true")
     ap.add_argument("--skip-convert", action="store_true")
@@ -127,6 +128,8 @@ def parse_args():
     ap.add_argument("--skip-match", action="store_true")
     ap.add_argument("--superbatches", type=int, default=8)
     ap.add_argument("--batches-per-superbatch", type=int, default=1000)
+    ap.add_argument("--start-superbatch", type=int, default=1)
+    ap.add_argument("--resume-checkpoint")
     ap.add_argument("--threads", type=int, default=6)
     ap.add_argument("--save-rate", type=int, default=2)
     ap.add_argument("--baseline-bin")
@@ -150,6 +153,7 @@ def main():
 
     data_text = Path(args.data_text).resolve() if args.data_text else data_dir / f"{args.name}.txt"
     data_bin = Path(args.data_bin).resolve() if args.data_bin else data_dir / f"{args.name}.data"
+    extra_data_bins = [Path(path).resolve() for path in args.extra_data_bin]
 
     if not args.skip_datagen:
         cmd = [
@@ -166,6 +170,9 @@ def main():
         ]
         if args.openings:
             cmd.append(str(Path(args.openings).resolve()))
+        else:
+            cmd.append("-")
+        cmd.append(str(args.threads))
         run(cmd)
 
     if not args.skip_convert:
@@ -187,18 +194,28 @@ def main():
     if not args.skip_train:
         if not data_bin.exists():
             raise FileNotFoundError(f"training data not found: {data_bin}")
+        for extra in extra_data_bins:
+            if not extra.exists():
+                raise FileNotFoundError(f"extra training data not found: {extra}")
+        train_data_bins = [data_bin, *extra_data_bins]
         env = os.environ.copy()
         env.update(
             {
                 "BITFOX_TRAIN_ID": args.name,
-                "BITFOX_TRAIN_DATA": str(data_bin),
+                "BITFOX_TRAIN_DATA": os.pathsep.join(str(path) for path in train_data_bins),
                 "BITFOX_TRAIN_OUTPUT": str(checkpoints),
                 "BITFOX_TRAIN_THREADS": str(args.threads),
                 "BITFOX_TRAIN_SUPERBATCHES": str(args.superbatches),
                 "BITFOX_TRAIN_BATCHES_PER_SUPERBATCH": str(args.batches_per_superbatch),
+                "BITFOX_TRAIN_START_SUPERBATCH": str(args.start_superbatch),
                 "BITFOX_TRAIN_SAVE_RATE": str(args.save_rate),
             }
         )
+        if args.resume_checkpoint:
+            resume_checkpoint = Path(args.resume_checkpoint).resolve()
+            if not resume_checkpoint.exists():
+                raise FileNotFoundError(f"resume checkpoint not found: {resume_checkpoint}")
+            env["BITFOX_TRAIN_RESUME"] = str(resume_checkpoint)
         run(["cargo", "run", "--release", "--manifest-path", str(TRAINER / "Cargo.toml"), "--bin", "train"], env=env)
 
     network = Path(args.network).resolve() if args.network else None
@@ -253,10 +270,14 @@ def main():
             ("created_utc", dt.datetime.now(dt.timezone.utc).isoformat()),
             ("positions", args.positions if not args.skip_datagen else None),
             ("datagen_nodes", args.nodes if not args.skip_datagen else None),
+            ("threads", args.threads),
             ("data_text", data_text),
             ("data_bin", data_bin),
+            ("extra_data_bins", os.pathsep.join(str(path) for path in extra_data_bins) or None),
             ("network", exported),
             ("network_sha256", sha256(exported) if exported is not None else None),
+            ("resume_checkpoint", Path(args.resume_checkpoint).resolve() if args.resume_checkpoint else None),
+            ("start_superbatch", args.start_superbatch if not args.skip_train else None),
             ("superbatches", args.superbatches if not args.skip_train else None),
             ("batches_per_superbatch", args.batches_per_superbatch if not args.skip_train else None),
             ("match_games", args.games if not args.skip_match else None),

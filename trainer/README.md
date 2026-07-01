@@ -71,6 +71,7 @@ match logs under one run directory:
 python3 trainer/experiment.py gen1 \
   --positions 2000000 \
   --nodes 10000 \
+  --threads 6 \
   --superbatches 8 \
   --batches-per-superbatch 1000 \
   --games 400 \
@@ -80,6 +81,9 @@ python3 trainer/experiment.py gen1 \
 The script writes to `trainer/runs/<name>/`, exports
 `trainer/runs/<name>/networks/<name>.nnue`, builds a temporary candidate engine
 with that network, then runs the self-play gate against the current engine.
+`--threads` is used by both self-play data generation and training.
+Use `--extra-data-bin <file>` to train over additional Bullet data files in the
+same run.
 
 To test an existing network without regenerating data:
 
