@@ -44,14 +44,13 @@ impl Search {
             legal.moves[0]
         };
 
-        let mut prev = 0;
+        let mut avg = crate::SCORE_NONE;
         for depth in 1..=self.max_depth {
             self.seldepth = 0;
-            let score = self.aspiration(board, depth, prev);
+            let score = self.aspiration(board, depth, &mut avg);
             if self.stop && depth > 1 {
                 break;
             }
-            prev = score;
             self.best_score = score;
             self.completed_depth = depth;
             if !self.pv[0][0].is_none() {
@@ -70,27 +69,38 @@ impl Search {
         best
     }
 
-    pub(super) fn aspiration(&mut self, board: &mut Board, depth: i32, prev: i32) -> i32 {
+    pub(super) fn aspiration(&mut self, board: &mut Board, depth: i32, avg: &mut i32) -> i32 {
         if depth < 4 {
-            return self.negamax(board, -INFINITY, INFINITY, depth, 0);
+            let score = self.negamax(board, -INFINITY, INFINITY, depth, 0);
+            *avg = score;
+            return score;
         }
-        let mut delta = 25;
-        let mut alpha = (prev - delta).max(-INFINITY);
-        let mut beta = (prev + delta).min(INFINITY);
+        let mut delta = 23 + *avg * *avg / 26394;
+        let mut alpha = (*avg - delta).max(-INFINITY);
+        let mut beta = (*avg + delta).min(INFINITY);
+        let mut reduction = 0;
         loop {
-            let score = self.negamax(board, alpha, beta, depth, 0);
+            let score = self.negamax(board, alpha, beta, (depth - reduction).max(1), 0);
             if self.stop {
                 return score;
             }
             if score <= alpha {
-                beta = (alpha + beta) / 2;
                 alpha = (score - delta).max(-INFINITY);
+                beta = (alpha + delta).min(beta);
+                delta += 26 * delta / 128;
             } else if score >= beta {
+                alpha = (beta - delta).max(alpha);
                 beta = (score + delta).min(INFINITY);
+                if !is_decisive(score) {
+                    reduction += 1;
+                } else {
+                    reduction = reduction.min(1);
+                }
+                delta += 60 * delta / 128;
             } else {
+                *avg = (*avg + score) / 2;
                 return score;
             }
-            delta += delta / 2;
         }
     }
 }
