@@ -3,7 +3,37 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QSet>
+
+#include <algorithm>
+
+static QVector<int> versionOf(const QString &name) {
+    QVector<int> v;
+    static const QRegularExpression re(QStringLiteral("(\\d+(?:\\.\\d+)*)\\s*$"));
+    const QRegularExpressionMatch m = re.match(name);
+    if (m.hasMatch()) {
+        const QStringList parts = m.captured(1).split('.');
+        for (const QString &part : parts) {
+            v.append(part.toInt());
+        }
+    }
+    return v;
+}
+
+static bool newerThan(const EngineEntry &a, const EngineEntry &b) {
+    const QVector<int> va = versionOf(a.name);
+    const QVector<int> vb = versionOf(b.name);
+    const int n = qMax(va.size(), vb.size());
+    for (int i = 0; i < n; ++i) {
+        const int x = i < va.size() ? va[i] : 0;
+        const int y = i < vb.size() ? vb[i] : 0;
+        if (x != y) {
+            return x > y;
+        }
+    }
+    return a.name < b.name;
+}
 
 bool EngineCatalog::looksLikeEngine(const QString &path) {
     QFileInfo info(path);
@@ -48,5 +78,6 @@ QVector<EngineEntry> EngineCatalog::discover() {
             }
         }
     }
+    std::sort(all.begin(), all.end(), newerThan);
     return all;
 }
