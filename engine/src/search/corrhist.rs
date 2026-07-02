@@ -11,6 +11,8 @@ type Table = [[[i16; SIZE]; BUCKETS]; 2];
 pub struct CorrHist {
     pawn: Box<Table>,
     non_pawn: [Box<Table>; 2],
+    minor: Box<Table>,
+    major: Box<Table>,
 }
 
 impl Default for CorrHist {
@@ -18,6 +20,8 @@ impl Default for CorrHist {
         CorrHist {
             pawn: zeroed_table(),
             non_pawn: [zeroed_table(), zeroed_table()],
+            minor: zeroed_table(),
+            major: zeroed_table(),
         }
     }
 }
@@ -38,6 +42,8 @@ impl CorrHist {
         *self.pawn = zeroed();
         *self.non_pawn[0] = zeroed();
         *self.non_pawn[1] = zeroed();
+        *self.minor = zeroed();
+        *self.major = zeroed();
     }
 
     pub fn value(&self, board: &Board) -> i32 {
@@ -47,7 +53,9 @@ impl CorrHist {
         let pawn = self.pawn[s][b][board.pawn_key() as usize & MASK] as i32;
         let npw = self.non_pawn[0][s][b][board.non_pawn_key(Color::White) as usize & MASK] as i32;
         let npb = self.non_pawn[1][s][b][board.non_pawn_key(Color::Black) as usize & MASK] as i32;
-        pawn + npw + npb
+        let minor = self.minor[s][b][board.minor_key() as usize & MASK] as i32;
+        let major = self.major[s][b][board.major_key() as usize & MASK] as i32;
+        pawn + npw + npb + minor + major
     }
 
     pub fn update(&mut self, board: &Board, depth: i32, diff: i32) {
@@ -65,6 +73,14 @@ impl CorrHist {
         );
         apply(
             &mut self.non_pawn[1][s][b][board.non_pawn_key(Color::Black) as usize & MASK],
+            bonus,
+        );
+        apply(
+            &mut self.minor[s][b][board.minor_key() as usize & MASK],
+            bonus,
+        );
+        apply(
+            &mut self.major[s][b][board.major_key() as usize & MASK],
             bonus,
         );
     }

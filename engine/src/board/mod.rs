@@ -31,6 +31,8 @@ pub struct Board {
     key: u64,
     pawn_key: u64,
     non_pawn_key: [u64; 2],
+    minor_key: u64,
+    major_key: u64,
     history: Vec<u64>,
     stack: Vec<Undo>,
 }
@@ -51,6 +53,8 @@ impl Board {
             key: 0,
             pawn_key: 0,
             non_pawn_key: [0; 2],
+            minor_key: 0,
+            major_key: 0,
             history: Vec::with_capacity(256),
             stack: Vec::with_capacity(256),
         }
@@ -80,10 +84,21 @@ impl Board {
     fn toggle_keys(&mut self, piece: Piece, sq: Square) {
         let k = zobrist::piece(piece, sq);
         self.key ^= k;
-        if piece.piece_type() == PieceType::Pawn {
-            self.pawn_key ^= k;
-        } else {
-            self.non_pawn_key[piece.color().index()] ^= k;
+        match piece.piece_type() {
+            PieceType::Pawn => self.pawn_key ^= k,
+            PieceType::Knight | PieceType::Bishop => {
+                self.non_pawn_key[piece.color().index()] ^= k;
+                self.minor_key ^= k;
+            }
+            PieceType::Rook | PieceType::Queen => {
+                self.non_pawn_key[piece.color().index()] ^= k;
+                self.major_key ^= k;
+            }
+            PieceType::King => {
+                self.non_pawn_key[piece.color().index()] ^= k;
+                self.minor_key ^= k;
+                self.major_key ^= k;
+            }
         }
     }
 
@@ -156,6 +171,16 @@ impl Board {
     #[inline]
     pub fn non_pawn_key(&self, color: Color) -> u64 {
         self.non_pawn_key[color.index()]
+    }
+
+    #[inline]
+    pub fn minor_key(&self) -> u64 {
+        self.minor_key
+    }
+
+    #[inline]
+    pub fn major_key(&self) -> u64 {
+        self.major_key
     }
 
     #[inline]
