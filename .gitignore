@@ -18,6 +18,9 @@
 /data/nnue/
 /networks/
 
+# Syzygy tablebases (downloaded separately, large)
+/data/syzygy/
+
 # Training data and checkpoints (large, generated)
 /trainer/data/
 /trainer/checkpoints/
