@@ -19,10 +19,12 @@ impl Search {
             for _ in 1..self.threads {
                 let tt = Arc::clone(&self.tt);
                 let stop = Arc::clone(&self.stop_signal);
+                let tb = self.tb.clone();
                 let mut b = board.clone();
                 let lim = limits.clone();
                 scope.spawn(move || {
                     let mut helper = Search::worker(tt, stop);
+                    helper.tb = tb;
                     helper.run(&mut b, &lim, false);
                 });
             }

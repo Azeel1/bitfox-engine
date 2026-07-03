@@ -69,6 +69,25 @@ impl Search {
             }
         }
 
+        if let Some(tb) = &self.tb {
+            if !root
+                && !is_excluded
+                && board.halfmove() == 0
+                && board.castling().0 == 0
+                && (board.occupancy().count() as usize) <= tb.max_pieces()
+            {
+                if let Some(wdl) = tb.probe_wdl(board) {
+                    self.tb_hits += 1;
+                    let score = match wdl {
+                        shakmaty_syzygy::Wdl::Win => MATE_IN_MAX - 1 - ply as i32,
+                        shakmaty_syzygy::Wdl::Loss => -(MATE_IN_MAX - 1 - ply as i32),
+                        _ => DRAW,
+                    };
+                    return score;
+                }
+            }
+        }
+
         let raw_eval = if in_check {
             0
         } else {

@@ -6,6 +6,7 @@ mod negamax;
 mod ordering;
 mod pv;
 mod quiescence;
+mod syzygy;
 mod time;
 
 pub use limits::Limits;
@@ -40,6 +41,8 @@ pub struct Search {
     stop_signal: Arc<AtomicBool>,
     is_main: bool,
     threads: usize,
+    tb: Option<Arc<syzygy::Syzygy>>,
+    tb_hits: u64,
     nnue: crate::eval::Nnue,
     killers: [[Move; 2]; MAX_PLY + 2],
     excluded: [Move; MAX_PLY + 4],
@@ -92,6 +95,8 @@ impl Search {
             stop_signal,
             is_main,
             threads: 1,
+            tb: None,
+            tb_hits: 0,
             nnue: crate::eval::Nnue::default(),
             killers: [[Move::NONE; 2]; MAX_PLY + 2],
             excluded: [Move::NONE; MAX_PLY + 4],
@@ -138,6 +143,11 @@ impl Search {
 
     pub fn set_threads(&mut self, n: usize) {
         self.threads = n.max(1);
+    }
+
+    pub fn set_tablebase(&mut self, path: &str) -> bool {
+        self.tb = syzygy::Syzygy::load(path);
+        self.tb.is_some()
     }
 
     #[inline]

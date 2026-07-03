@@ -6,6 +6,15 @@ pub fn run() {
     let mut board = Board::startpos();
     let mut search = Box::new(Search::new(64));
 
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let default_tb = dir.join("syzygy");
+            if default_tb.is_dir() {
+                search.set_tablebase(&default_tb.to_string_lossy());
+            }
+        }
+    }
+
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
         let line = match line {
@@ -19,6 +28,7 @@ pub fn run() {
                 println!("id author Bitfox Team");
                 println!("option name Hash type spin default 64 min 1 max 4096");
                 println!("option name Threads type spin default 1 min 1 max 256");
+                println!("option name SyzygyPath type string default <empty>");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
@@ -123,6 +133,18 @@ fn set_option(line: &str, search: &mut Search) {
         } else if name == "threads" {
             if let Ok(n) = value.parse::<usize>() {
                 search.set_threads(n);
+            }
+        } else if name == "syzygypath" {
+            let path = line
+                .split_once(" value ")
+                .map(|(_, v)| v.trim())
+                .unwrap_or("");
+            if !path.is_empty() && path != "<empty>" {
+                if search.set_tablebase(path) {
+                    println!("info string syzygy tablebases loaded");
+                } else {
+                    println!("info string no syzygy tables found at {path}");
+                }
             }
         }
     }

@@ -22,3 +22,7 @@ panic = "abort"
 
 [profile.dev]
 opt-level = 1
+
+[dependencies]
+shakmaty = "0.30"
+shakmaty-syzygy = "0.28"
