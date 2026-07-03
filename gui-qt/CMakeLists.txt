@@ -16,7 +16,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia Network)
 if(COMMAND qt_standard_project_setup)
     qt_standard_project_setup()
 endif()
@@ -63,12 +63,14 @@ qt_add_executable(bitfox-board
     src/ui/MainWindow.cpp
     src/ui/SidePanel.cpp
     src/ui/Icons.cpp
+    src/ui/ReleasesDialog.cpp
     src/board/BoardView.cpp
     src/board/CapturedView.cpp
     src/core/CoreBoard.cpp
     src/audio/SoundBank.cpp
     src/engine/UciEngine.cpp
     src/engine/EngineCatalog.cpp
+    src/engine/ReleaseManager.cpp
     src/game/GameController.cpp
     resources/resources.qrc
 )
@@ -81,6 +83,7 @@ target_include_directories(bitfox-board PRIVATE
 target_link_libraries(bitfox-board PRIVATE
     Qt6::Widgets
     Qt6::Multimedia
+    Qt6::Network
     bitfox_core
 )
 

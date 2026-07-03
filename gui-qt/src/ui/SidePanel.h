@@ -36,6 +36,7 @@ signals:
     void redoRequested();
     void hintRequested();
     void settingsRequested();
+    void versionsRequested();
 
 private:
     QComboBox *m_white;
@@ -47,6 +48,7 @@ private:
     QPushButton *m_redo;
     QPushButton *m_hint;
     QPushButton *m_settings;
+    QPushButton *m_versions;
     QListWidget *m_moves;
     QLabel *m_status;
     QLabel *m_eval;

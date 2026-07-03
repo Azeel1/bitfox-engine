@@ -25,6 +25,7 @@ private slots:
     void updateCaptured();
     void showHint();
     void openSettings();
+    void openVersions();
 
 private:
     void updateHumanColors();

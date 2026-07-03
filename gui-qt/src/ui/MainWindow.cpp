@@ -19,6 +19,7 @@
 #include "engine/EngineCatalog.h"
 #include "engine/UciEngine.h"
 #include "game/GameController.h"
+#include "ui/ReleasesDialog.h"
 #include "ui/SidePanel.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -64,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_panel, &SidePanel::redoRequested, m_game, &GameController::redo);
     connect(m_panel, &SidePanel::hintRequested, this, &MainWindow::showHint);
     connect(m_panel, &SidePanel::settingsRequested, this, &MainWindow::openSettings);
+    connect(m_panel, &SidePanel::versionsRequested, this, &MainWindow::openVersions);
     connect(m_boardView, &BoardView::premoveRequested, m_game, &GameController::setPremove);
     connect(m_game, &GameController::premovesChanged, m_boardView, &BoardView::setPremoves);
 
@@ -203,6 +205,13 @@ void MainWindow::openSettings() {
     if (!m_premoveOn) {
         m_game->clearPremove();
     }
+}
+
+void MainWindow::openVersions() {
+    ReleasesDialog dlg(this);
+    connect(&dlg, &ReleasesDialog::enginesChanged, this,
+            [this] { m_panel->setEngines(EngineCatalog::discover()); });
+    dlg.exec();
 }
 
 void MainWindow::updateCaptured() {

@@ -65,6 +65,9 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent) {
     m_black = new QComboBox(players);
     form->addRow(tr("White"), m_white);
     form->addRow(tr("Black"), m_black);
+    m_versions = new QPushButton(tr("Get more versions..."), players);
+    m_versions->setCursor(Qt::PointingHandCursor);
+    form->addRow(m_versions);
     m_time = new QSpinBox(players);
     m_time->setLocale(QLocale(QLocale::English, QLocale::UnitedStates));
     m_time->setRange(50, 60000);
@@ -98,6 +101,7 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent) {
     connect(m_redo, &QPushButton::clicked, this, &SidePanel::redoRequested);
     connect(m_hint, &QPushButton::clicked, this, &SidePanel::hintRequested);
     connect(m_settings, &QPushButton::clicked, this, &SidePanel::settingsRequested);
+    connect(m_versions, &QPushButton::clicked, this, &SidePanel::versionsRequested);
     connect(m_time, qOverload<int>(&QSpinBox::valueChanged), this,
             &SidePanel::movetimeChanged);
     connect(m_white, qOverload<int>(&QComboBox::currentIndexChanged), this,
