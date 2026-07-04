@@ -36,6 +36,11 @@ against 1.1.1, both confirmed by SPRT.
 - Settings (sound, premove, automatic updates) persist between runs.
 - Optional automatic check for the newest engine version on startup.
 
+### Removed
+- The live depth/eval readout in the side panel. It read the engine's raw
+  score without normalizing for its native scale, which produced misleading
+  numbers; it will come back once fixed properly.
+
 ## [1.1.1]
 
 ### Packaging
