@@ -37,6 +37,7 @@ impl Search {
         if ply >= MAX_PLY {
             return self.nnue.eval(board);
         }
+        self.cutoff_cnt[ply + 2] = 0;
 
         let us = board.side();
         let in_check = board.in_check(us);
@@ -347,6 +348,9 @@ impl Search {
                     } else {
                         r += 1;
                     }
+                    if self.cutoff_cnt[ply + 1] > 2 {
+                        r += 1;
+                    }
                     let hist = self.history_get(us, from_th, to_th, m)
                         + self.conthist_get(ply, moved_pc, m.to().index());
                     r -= hist / 8192;
@@ -377,6 +381,7 @@ impl Search {
                     self.update_pv(ply, m);
                     if score >= beta {
                         bound = Bound::Lower;
+                        self.cutoff_cnt[ply] += 1;
                         let bonus = (depth * depth).min(1200);
                         if quiet {
                             self.update_killers(ply, m);

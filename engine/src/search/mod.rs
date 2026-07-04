@@ -20,16 +20,12 @@ use std::time::{Duration, Instant};
 
 pub const PIECE_NONE: usize = 12;
 
-// [prev_piece][prev_to][piece][to]
 pub type ContHist = [[[[i16; 64]; 13]; 64]; 13];
 
-// [color][from_threatened][to_threatened][from][to]
 pub type QuietHist = [[[[[i32; 64]; 64]; 2]; 2]; 2];
 
-// [moved_piece][to][captured_type]
 pub type NoisyHist = [[[i16; 6]; 64]; 12];
 
-// [prev2_piece][prev2_to][prev1_piece][prev1_to]
 pub type ContCorr = [[[[i16; 64]; 13]; 64]; 13];
 
 const HIST_MAX: i32 = 16384;
@@ -54,6 +50,7 @@ pub struct Search {
     ss_eval: Box<[i32; MAX_PLY + 4]>,
     ss_piece: [usize; MAX_PLY + 4],
     ss_to: [usize; MAX_PLY + 4],
+    cutoff_cnt: [i32; MAX_PLY + 4],
     pv: Box<[[Move; MAX_PLY + 1]; MAX_PLY + 1]>,
     pv_len: [usize; MAX_PLY + 1],
     lmr: [[i32; 64]; 64],
@@ -108,6 +105,7 @@ impl Search {
             ss_eval: Box::new([crate::SCORE_NONE; MAX_PLY + 4]),
             ss_piece: [PIECE_NONE; MAX_PLY + 4],
             ss_to: [0; MAX_PLY + 4],
+            cutoff_cnt: [0; MAX_PLY + 4],
             pv: Box::new([[Move::NONE; MAX_PLY + 1]; MAX_PLY + 1]),
             pv_len: [0; MAX_PLY + 1],
             lmr,
