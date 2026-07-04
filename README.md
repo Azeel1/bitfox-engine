@@ -72,7 +72,7 @@ cmake --build gui-qt/build --config Release
 
 Releases are produced by the `Release` workflow in GitHub Actions. To refresh
 the current release packages, run the workflow again with the existing matching
-tag, such as `v1.1.1`. For a new release, bump the version in
+tag, such as `v2.0.0`. For a new release, bump the version in
 `engine/Cargo.toml`, update `CHANGELOG.md`, push `main`, then run the workflow
 with the new matching tag.
 
@@ -97,6 +97,7 @@ The engine currently has:
 - NNUE evaluation: a king-bucketed, side-to-move-relative network with an
   incremental accumulator and NEON SIMD on Apple Silicon, with a classical
   PSQT evaluator kept as a reference.
+- Syzygy tablebase probing (3-4-5 piece WDL) for exact endgame scores.
 
 Ongoing work is strength tuning: larger networks, more and better training data,
 and search-parameter refinement.
@@ -209,10 +210,11 @@ position startpos moves e2e4 e7e5
 go depth 12
 ```
 
-| Option    | Type | Default | Range    | Description                          |
-| --------- | ---- | ------- | -------- | ------------------------------------ |
-| `Hash`    | spin | 64      | 1-4096   | Transposition table size in MB       |
-| `Threads` | spin | 1       | 1-256    | LazySMP search threads               |
+| Option        | Type   | Default | Range    | Description                          |
+| ------------- | ------ | ------- | -------- | ------------------------------------ |
+| `Hash`        | spin   | 64      | 1-4096   | Transposition table size in MB       |
+| `Threads`     | spin   | 1       | 1-256    | LazySMP search threads               |
+| `SyzygyPath`  | string | empty   |          | Path(s) to Syzygy WDL tables, `;`-separated. A `syzygy/` folder next to the binary loads automatically. |
 
 The `bitfox` binary speaks UCI; pair it with Cute Chess, En Croissant, Nibbler,
 or any other UCI-compatible interface. The bundled Qt board below is the desktop
@@ -228,6 +230,11 @@ cmake -S gui-qt -B gui-qt/build -DCMAKE_BUILD_TYPE=Release
 cmake --build gui-qt/build --parallel
 ./gui-qt/build/bitfox-board
 ```
+
+It discovers every `Bitfox <version>` binary placed in an `engines/` folder next
+to the executable and auto-selects the newest, and it has an in-app version
+manager (Settings -> "Get more versions...") that lists, downloads, and
+installs GitHub releases without leaving the app.
 
 ## Self-play strength gate
 
