@@ -11,6 +11,31 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 Releases are checked by fixed-node self-play (`tools/selfplay.py`). The version
 in `engine/Cargo.toml` is the version reported over UCI.
 
+## [2.0.0]
+
+Bitfox 2. Measured +74 Elo at fixed nodes and +133 Elo at real time control
+against 1.1.1, both confirmed by SPRT.
+
+### Evaluation
+- Stronger network trained on 59M mixed self-play positions. +118 Elo.
+
+### Search
+- Aspiration windows: score-centered window, adaptive delta growth, and a
+  depth reduction on repeated non-decisive fail-highs. +42 Elo.
+- Continuation correction history alongside the existing pawn and non-pawn
+  correction history. +36 Elo.
+- Minor and major piece correction history. +27 Elo.
+- Cutoff-count based late-move reductions. +18 Elo.
+
+### Endgame
+- Syzygy tablebase probing (3-4-5 piece WDL) for exact endgame scores.
+
+### GUI
+- In-app version manager: browse and download GitHub releases without
+  leaving the app. The engine catalog auto-selects the newest version.
+- Settings (sound, premove, automatic updates) persist between runs.
+- Optional automatic check for the newest engine version on startup.
+
 ## [1.1.1]
 
 ### Packaging
