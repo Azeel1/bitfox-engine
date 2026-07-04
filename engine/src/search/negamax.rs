@@ -390,6 +390,9 @@ impl Search {
                             self.update_killers(ply, m);
                             self.update_history(us, from_th, to_th, m, bonus);
                             self.update_conthist(ply, moved_pc, m.to().index(), bonus);
+                            if ply >= 1 && self.ss_piece[ply - 1] != PIECE_NONE {
+                                self.countermove[self.ss_piece[ply - 1]][self.ss_to[ply - 1]] = m;
+                            }
                             for q in quiets.iter().take(quiet_count) {
                                 let qf = tc.all.contains(q.from());
                                 let qt = tc.all.contains(q.to());

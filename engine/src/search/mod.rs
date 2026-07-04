@@ -44,6 +44,7 @@ pub struct Search {
     excluded: [Move; MAX_PLY + 4],
     history: Box<QuietHist>,
     noisy_hist: Box<NoisyHist>,
+    countermove: Box<[[Move; 64]; 13]>,
     cont_hist: Box<ContHist>,
     cont_corr: Box<ContCorr>,
     corrhist: corrhist::CorrHist,
@@ -99,6 +100,7 @@ impl Search {
             excluded: [Move::NONE; MAX_PLY + 4],
             history: zeroed_box(),
             noisy_hist: zeroed_box(),
+            countermove: zeroed_box(),
             cont_hist: zeroed_box(),
             cont_corr: zeroed_box(),
             corrhist: corrhist::CorrHist::default(),
@@ -128,6 +130,7 @@ impl Search {
         self.killers = [[Move::NONE; 2]; MAX_PLY + 2];
         self.history = zeroed_box();
         self.noisy_hist = zeroed_box();
+        self.countermove = zeroed_box();
         self.cont_hist = zeroed_box();
         self.cont_corr = zeroed_box();
         self.corrhist.clear();
