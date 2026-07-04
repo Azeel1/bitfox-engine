@@ -8,6 +8,7 @@
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
+    app.setOrganizationName("Bitfox");
     app.setApplicationName("Bitfox");
     app.setStyle("Fusion");
 

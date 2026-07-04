@@ -22,7 +22,6 @@ public:
     void rebuildMoves(const QStringList &moves);
     void clearMoves();
     void setStatus(const QString &text);
-    void setEval(const QString &name, int depth, int scoreCp);
     void setCaptured(const QVector<int> &whiteTook, int whiteAdv,
                      const QVector<int> &blackTook, int blackAdv);
     int movetime() const;
@@ -51,7 +50,6 @@ private:
     QPushButton *m_versions;
     QListWidget *m_moves;
     QLabel *m_status;
-    QLabel *m_eval;
     CapturedView *m_capByWhite;
     CapturedView *m_capByBlack;
 };

@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSettings>
 #include <QVBoxLayout>
 #include <QVector>
 #include <QWidget>
@@ -17,6 +18,7 @@
 #include "board/BoardView.h"
 #include "core/CoreBoard.h"
 #include "engine/EngineCatalog.h"
+#include "engine/ReleaseManager.h"
 #include "engine/UciEngine.h"
 #include "game/GameController.h"
 #include "ui/ReleasesDialog.h"
@@ -42,6 +44,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     m_boardView->setBoard(m_game->board());
     m_boardView->setPremoveBoard(m_game->premoveBoard());
     m_game->setMovetime(m_panel->movetime());
+    loadSettings();
 
     connect(m_boardView, &BoardView::moveRequested, m_game,
             &GameController::requestHumanMove);
@@ -52,7 +55,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(m_game, &GameController::historyRebuilt, this, &MainWindow::onHistoryRebuilt);
     connect(m_game, &GameController::statusText, m_panel, &SidePanel::setStatus);
     connect(m_game, &GameController::gameOver, this, &MainWindow::onGameOver);
-    connect(m_game, &GameController::engineInfo, m_panel, &SidePanel::setEval);
     connect(m_game, &GameController::sound, this,
             [this](const QString &key) { m_sound->play(key); });
 
@@ -73,6 +75,42 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     updateHumanColors();
     onNewGame();
     m_boardView->setFocus();
+    checkForUpdates();
+}
+
+void MainWindow::loadSettings() {
+    QSettings settings;
+    m_soundOn = settings.value("soundOn", true).toBool();
+    m_premoveOn = settings.value("premoveOn", true).toBool();
+    m_autoUpdate = settings.value("autoUpdate", false).toBool();
+    m_sound->setMuted(!m_soundOn);
+    m_boardView->setPremoveEnabled(m_premoveOn);
+}
+
+void MainWindow::checkForUpdates() {
+    if (!m_autoUpdate) {
+        return;
+    }
+    auto *manager = new ReleaseManager(this);
+    connect(manager, &ReleaseManager::fetchFailed, manager,
+            [manager](const QString &) { manager->deleteLater(); });
+    connect(manager, &ReleaseManager::releasesReady, this,
+            [this, manager](const QVector<ReleaseInfo> &releases) {
+                if (releases.isEmpty() || releases.first().installed ||
+                    releases.first().assetUrl.isEmpty()) {
+                    manager->deleteLater();
+                    return;
+                }
+                connect(manager, &ReleaseManager::downloadFinished, manager,
+                        [this, manager](const QString &, bool success, const QString &) {
+                            if (success) {
+                                m_panel->setEngines(EngineCatalog::discover());
+                            }
+                            manager->deleteLater();
+                        });
+                manager->downloadRelease(releases.first());
+            });
+    manager->fetchReleases();
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event) {
@@ -193,11 +231,16 @@ void MainWindow::openSettings() {
     auto *premove = new QCheckBox(tr("Premove"), &dlg);
     premove->setChecked(m_premoveOn);
     lay->addWidget(premove);
+    auto *autoUpdate = new QCheckBox(tr("Automatically download the newest engine version"), &dlg);
+    autoUpdate->setChecked(m_autoUpdate);
+    lay->addWidget(autoUpdate);
     auto *done = new QPushButton(tr("Done"), &dlg);
     done->setObjectName("primary");
     lay->addWidget(done);
     connect(done, &QPushButton::clicked, &dlg, &QDialog::accept);
-    dlg.exec();
+    if (dlg.exec() != QDialog::Accepted) {
+        return;
+    }
     m_soundOn = sound->isChecked();
     m_sound->setMuted(!m_soundOn);
     m_premoveOn = premove->isChecked();
@@ -205,6 +248,12 @@ void MainWindow::openSettings() {
     if (!m_premoveOn) {
         m_game->clearPremove();
     }
+    m_autoUpdate = autoUpdate->isChecked();
+
+    QSettings settings;
+    settings.setValue("soundOn", m_soundOn);
+    settings.setValue("premoveOn", m_premoveOn);
+    settings.setValue("autoUpdate", m_autoUpdate);
 }
 
 void MainWindow::openVersions() {

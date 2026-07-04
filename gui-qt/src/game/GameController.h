@@ -41,13 +41,11 @@ signals:
     void historyRebuilt(const QStringList &moves, int lastFrom, int lastTo);
     void gameOver(int status, const QString &text);
     void statusText(const QString &text);
-    void engineInfo(const QString &name, int depth, int scoreCp);
     void sound(const QString &key);
     void premovesChanged(const QVector<QPair<int, int>> &moves);
 
 private slots:
     void onEngineBestMove(int searchId, int from, int to, int promo);
-    void onEngineInfo(int depth, int scoreCp, const QString &pv);
 
 private:
     struct Premove {

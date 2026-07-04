@@ -22,7 +22,6 @@ public:
 signals:
     void ready();
     void bestMove(int searchId, int from, int to, int promo);
-    void info(int depth, int scoreCp, const QString &pv);
     void nameResolved(const QString &name);
 
 private slots:

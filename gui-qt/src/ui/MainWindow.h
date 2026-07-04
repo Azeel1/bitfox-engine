@@ -29,6 +29,8 @@ private slots:
 
 private:
     void updateHumanColors();
+    void loadSettings();
+    void checkForUpdates();
 
     BoardView *m_boardView;
     SidePanel *m_panel;
@@ -37,4 +39,5 @@ private:
     UciEngine *m_engines[2] = {nullptr, nullptr};
     bool m_soundOn = true;
     bool m_premoveOn = true;
+    bool m_autoUpdate = false;
 };

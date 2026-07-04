@@ -202,7 +202,6 @@ void GameController::setEngine(int color, UciEngine *engine) {
     m_engines[color] = engine;
     if (engine) {
         connect(engine, &UciEngine::bestMove, this, &GameController::onEngineBestMove);
-        connect(engine, &UciEngine::info, this, &GameController::onEngineInfo);
     }
 }
 
@@ -477,15 +476,6 @@ void GameController::onEngineBestMove(int searchId, int from, int to, int promo)
     }
     emit sound(QStringLiteral("illegal"));
     emit statusText(tr("%1 returned an illegal move").arg(m_engines[side]->name()));
-}
-
-void GameController::onEngineInfo(int depth, int scoreCp, const QString &) {
-    if (!m_awaiting || sender() != m_engines[m_board.sideToMove()]) {
-        return;
-    }
-    UciEngine *engine = qobject_cast<UciEngine *>(sender());
-    int whiteRel = m_board.sideToMove() == 1 ? -scoreCp : scoreCp;
-    emit engineInfo(engine ? engine->name() : QString(), depth, whiteRel);
 }
 
 bool GameController::applyMove(int from, int to, int promo, bool engine) {

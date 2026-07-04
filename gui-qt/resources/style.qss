@@ -132,12 +132,6 @@ QPushButton#iconbtn:hover {
     color: #ffffff;
 }
 
-#eval {
-    color: #81b64c;
-    font-weight: 700;
-    padding: 2px;
-}
-
 #status {
     color: #b6b3ad;
     padding: 2px;

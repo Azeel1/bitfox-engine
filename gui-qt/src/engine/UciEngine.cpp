@@ -148,28 +148,6 @@ void UciEngine::handleLine(const QString &line) {
         emit ready();
         return;
     }
-    if (tokens.first() == QLatin1String("info")) {
-        int depth = 0;
-        int score = 0;
-        QString pv;
-        for (int i = 1; i < tokens.size(); ++i) {
-            if (tokens[i] == QLatin1String("depth") && i + 1 < tokens.size()) {
-                depth = tokens[i + 1].toInt();
-            } else if (tokens[i] == QLatin1String("score") && i + 2 < tokens.size()) {
-                if (tokens[i + 1] == QLatin1String("cp")) {
-                    score = tokens[i + 2].toInt();
-                } else if (tokens[i + 1] == QLatin1String("mate")) {
-                    int m = tokens[i + 2].toInt();
-                    score = m > 0 ? 100000 : -100000;
-                }
-            } else if (tokens[i] == QLatin1String("pv")) {
-                pv = tokens.mid(i + 1).join(' ');
-                break;
-            }
-        }
-        emit info(depth, score, pv);
-        return;
-    }
     if (tokens.first() == QLatin1String("bestmove") && tokens.size() >= 2) {
         int searchId = m_activeSearchId;
         bool suppress = m_stopping || searchId == 0;

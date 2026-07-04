@@ -86,10 +86,6 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent) {
     m_moves->setObjectName("moveList");
     root->addWidget(m_moves, 1);
 
-    m_eval = new QLabel(tr("-"), this);
-    m_eval->setObjectName("eval");
-    root->addWidget(m_eval);
-
     m_status = new QLabel(tr("Ready"), this);
     m_status->setObjectName("status");
     m_status->setWordWrap(true);
@@ -141,19 +137,6 @@ void SidePanel::rebuildMoves(const QStringList &moves) {
 void SidePanel::clearMoves() { m_moves->clear(); }
 
 void SidePanel::setStatus(const QString &text) { m_status->setText(text); }
-
-void SidePanel::setEval(const QString &name, int depth, int scoreCp) {
-    QString cp;
-    if (scoreCp >= 100000) {
-        cp = "#";
-    } else if (scoreCp <= -100000) {
-        cp = "-#";
-    } else {
-        QString sign = scoreCp > 0 ? "+" : "";
-        cp = QString("%1%2").arg(sign).arg(scoreCp / 100.0, 0, 'f', 2);
-    }
-    m_eval->setText(tr("%1   depth %2   eval %3").arg(name).arg(depth).arg(cp));
-}
 
 void SidePanel::setCaptured(const QVector<int> &whiteTook, int whiteAdv,
                             const QVector<int> &blackTook, int blackAdv) {
