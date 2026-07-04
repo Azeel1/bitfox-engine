@@ -107,7 +107,12 @@ and search-parameter refinement.
 Strength changes are checked with node-limited self-play
 (`tools/selfplay.py`) and an SPRT stop. For a rough external reference, Bitfox
 is also tested against Stockfish at fixed `UCI_Elo` levels under fast time
-controls. Public CCRL/CEGT ratings are not part of the release process yet.
+controls.
+
+Bitfox 1.1.0 is independently rated by
+[CCRL](https://computerchess.org.uk/ccrl/404/) at 3123 Elo (+11/-11), rank
+#199 of 2871 tested engines on the CCRL Blitz list, based on 3520 games
+([engine page](https://computerchess.org.uk/404/cgi/engine_details.cgi?print=Details&each_game=1&eng=Bitfox%201.1.0%2064-bit)).
 
 ## Repository layout
 
