@@ -10,8 +10,6 @@ pub enum Bound {
     Upper = 3,
 }
 
-// data: key16 << 48 | mv16 << 32 | (score as u16) << 16 | (eval as u16)
-// meta: depth (low 8) | gen_bound (next 8)
 struct AtomicEntry {
     data: AtomicU64,
     meta: AtomicU64,

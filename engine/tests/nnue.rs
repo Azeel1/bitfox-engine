@@ -18,7 +18,6 @@ fn move_info(board: &Board, m: Move) -> (Piece, Option<(Piece, usize)>) {
 }
 
 fn walk(board: &mut Board, nnue: &mut Nnue, depth: u32) {
-    // In debug builds this asserts the incremental accumulator equals a full refresh.
     nnue.eval(board);
     if depth == 0 {
         return;

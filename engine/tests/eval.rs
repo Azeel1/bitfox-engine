@@ -46,8 +46,6 @@ fn mirror_fen(fen: &str) -> String {
 
 #[test]
 fn startpos_is_balanced() {
-    // The starting position is perfectly symmetric, so the evaluation must be
-    // identical whichever side is to move (any side-to-move bonus is the same).
     let white_to_move = evaluate(&Board::startpos());
     let black_to_move = evaluate(
         &Board::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1").unwrap(),
