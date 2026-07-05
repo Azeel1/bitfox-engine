@@ -109,6 +109,39 @@ class Engine:
         self._send(f"setoption name Hash value {mb}")
         self.ready()
 
+    def set_option(self, name, value):
+        self._send(f"setoption name {name} value {value}")
+        self.ready()
+
+    def list_spin_options(self):
+        self._send("uci")
+        options = []
+        while True:
+            line = self._readline(30.0)
+            if line is None:
+                break
+            line = line.strip()
+            if line == "uciok":
+                break
+            if line.startswith("option name") and " type spin " in line:
+                parts = line.split()
+                name = parts[2]
+
+                def after(tok):
+                    i = parts.index(tok)
+                    return int(parts[i + 1])
+
+                options.append(
+                    {
+                        "name": name,
+                        "default": after("default"),
+                        "min": after("min"),
+                        "max": after("max"),
+                    }
+                )
+        self.ready()
+        return options
+
     def ready(self):
         self._send("isready")
         self._wait("readyok")

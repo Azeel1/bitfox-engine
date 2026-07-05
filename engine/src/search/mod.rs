@@ -4,12 +4,14 @@ mod iterative;
 mod limits;
 mod negamax;
 mod ordering;
+mod params;
 mod pv;
 mod quiescence;
 mod syzygy;
 mod time;
 
 pub use limits::Limits;
+pub use params::{Params, UCI_OPTIONS};
 
 use crate::tt::Tt;
 use crate::types::Move;
@@ -77,6 +79,7 @@ pub struct Search {
     ss_to: [usize; MAX_PLY + 4],
     cutoff_cnt: [i32; MAX_PLY + 4],
     stats: SearchStats,
+    params: Params,
     pv: Box<[[Move; MAX_PLY + 1]; MAX_PLY + 1]>,
     pv_len: [usize; MAX_PLY + 1],
     lmr: [[i32; 64]; 64],
@@ -134,6 +137,7 @@ impl Search {
             ss_to: [0; MAX_PLY + 4],
             cutoff_cnt: [0; MAX_PLY + 4],
             stats: SearchStats::default(),
+            params: Params::default(),
             pv: Box::new([[Move::NONE; MAX_PLY + 1]; MAX_PLY + 1]),
             pv_len: [0; MAX_PLY + 1],
             lmr,
@@ -170,6 +174,10 @@ impl Search {
 
     pub fn set_threads(&mut self, n: usize) {
         self.threads = n.max(1);
+    }
+
+    pub fn set_param(&mut self, name: &str, value: i32) -> bool {
+        self.params.set(name, value)
     }
 
     pub fn set_tablebase(&mut self, path: &str) -> bool {

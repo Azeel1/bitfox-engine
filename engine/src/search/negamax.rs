@@ -125,17 +125,21 @@ impl Search {
         };
 
         if !pv_node && !in_check && !is_excluded && !is_decisive(beta) {
-            if depth <= 3 && static_eval + 300 + 200 * depth <= alpha {
+            if depth <= 3
+                && static_eval + self.params.razor_base + self.params.razor_mult * depth <= alpha
+            {
                 let v = self.qsearch(board, alpha - 1, alpha, ply);
                 if v < alpha {
                     return v;
                 }
             }
-            if depth <= 8 && static_eval - 80 * depth >= beta {
+            if depth <= 8 && static_eval - self.params.rfp_margin * depth >= beta {
                 return static_eval;
             }
             if depth >= 3 && static_eval >= beta && board.has_non_pawn(us) {
-                let r = 3 + depth / 4 + ((static_eval - beta) / 200).min(3);
+                let r = self.params.nmp_base
+                    + depth / 4
+                    + ((static_eval - beta) / self.params.nmp_eval_div).min(self.params.nmp_max);
                 self.ss_piece[ply] = PIECE_NONE;
                 self.ss_to[ply] = 0;
                 board.make_null();
@@ -289,9 +293,9 @@ impl Search {
                     && quiet
                     && !is_win(beta)
                     && (legal + 1) as i32
-                        >= (2818
+                        >= (self.params.lmp_base
                             + 78 * improvement / 16
-                            + 1351 * depth * depth
+                            + self.params.lmp_depth_mult * depth * depth
                             + 74 * history / 1024)
                             / 1024
                 {
@@ -300,10 +304,10 @@ impl Search {
                 }
 
                 let futility_value = static_eval
-                    + 79 * depth
+                    + self.params.futility_mult * depth
                     + 55 * history / 1024
                     + 77 * (static_eval >= beta) as i32
-                    - 127;
+                    - self.params.futility_base;
                 if !in_check && !gives_check && quiet && depth < 14 && futility_value <= alpha {
                     if !is_decisive(best) && best < futility_value {
                         best = futility_value;
@@ -394,7 +398,7 @@ impl Search {
                         bound = Bound::Lower;
                         self.cutoff_cnt[ply] += 1;
                         stat!(self, beta_cutoffs);
-                        let bonus = (depth * depth).min(1200);
+                        let bonus = (depth * depth).min(self.params.history_bonus_max);
                         if quiet {
                             self.update_killers(ply, m);
                             self.update_history(us, from_th, to_th, m, bonus);

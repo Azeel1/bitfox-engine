@@ -1,5 +1,5 @@
 use crate::board::Board;
-use crate::search::{Limits, Search};
+use crate::search::{Limits, Search, UCI_OPTIONS};
 use std::io::{BufRead, Write};
 
 pub fn run() {
@@ -29,6 +29,12 @@ pub fn run() {
                 println!("option name Hash type spin default 64 min 1 max 4096");
                 println!("option name Threads type spin default 1 min 1 max 256");
                 println!("option name SyzygyPath type string default <empty>");
+                for p in UCI_OPTIONS {
+                    println!(
+                        "option name {} type spin default {} min {} max {}",
+                        p.name, p.default, p.min, p.max
+                    );
+                }
                 println!("uciok");
             }
             "isready" => println!("readyok"),
@@ -146,6 +152,8 @@ fn set_option(line: &str, search: &mut Search) {
                     println!("info string no syzygy tables found at {path}");
                 }
             }
+        } else if let Ok(v) = value.parse::<i32>() {
+            search.set_param(&name, v);
         }
     }
 }
