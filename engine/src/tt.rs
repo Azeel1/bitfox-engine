@@ -51,7 +51,12 @@ impl Tt {
 
     pub fn resize(&mut self, mb: usize) {
         let bytes = mb.max(1) * 1024 * 1024;
-        let count = (bytes / std::mem::size_of::<AtomicEntry>()).next_power_of_two() / 2;
+        let raw = bytes / std::mem::size_of::<AtomicEntry>();
+        let count = if raw.is_power_of_two() {
+            raw
+        } else {
+            raw.next_power_of_two() / 2
+        };
         let count = count.max(1024);
         self.entries = (0..count).map(|_| AtomicEntry::empty()).collect();
         self.mask = (count - 1) as u64;
@@ -69,6 +74,24 @@ impl Tt {
     pub fn new_search(&self) {
         let g = self.generation.load(Ordering::Relaxed).wrapping_add(1) & 0x3f;
         self.generation.store(g, Ordering::Relaxed);
+    }
+
+    pub fn hashfull(&self) -> u32 {
+        let sample = self.entries.len().min(1000);
+        if sample == 0 {
+            return 0;
+        }
+        let generation = self.generation.load(Ordering::Relaxed);
+        let used = self.entries[..sample]
+            .iter()
+            .filter(|e| {
+                let meta = e.meta.load(Ordering::Relaxed);
+                let depth = (meta & 0xff) as u8;
+                let gen = ((meta >> 8) as u8) >> 2;
+                depth != 0 && gen == generation
+            })
+            .count();
+        (used * 1000 / sample) as u32
     }
 
     #[inline]
@@ -157,3 +180,38 @@ impl Tt {
 }
 
 const _: () = assert!(MAX_PLY <= 255);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resize_uses_the_full_power_of_two_budget() {
+        for mb in [1usize, 4, 16, 64, 128, 256, 512] {
+            let tt = Tt::new(mb);
+            let requested = mb * 1024 * 1024;
+            let actual = tt.entries.len() * std::mem::size_of::<AtomicEntry>();
+            assert!(tt.entries.len().is_power_of_two());
+            assert!(
+                actual <= requested,
+                "{mb}MB: used {actual} bytes, over budget"
+            );
+            let raw = requested / std::mem::size_of::<AtomicEntry>();
+            if raw.is_power_of_two() {
+                assert_eq!(actual, requested, "{mb}MB: wasted half the requested Hash");
+            }
+        }
+    }
+
+    #[test]
+    fn resize_rounds_down_for_non_power_of_two_sizes() {
+        let tt = Tt::new(100);
+        let requested = 100 * 1024 * 1024;
+        let raw = requested / std::mem::size_of::<AtomicEntry>();
+        let expected_entries = raw.next_power_of_two() / 2;
+        let actual = tt.entries.len() * std::mem::size_of::<AtomicEntry>();
+        assert!(tt.entries.len().is_power_of_two());
+        assert_eq!(tt.entries.len(), expected_entries);
+        assert!(actual <= requested);
+    }
+}
