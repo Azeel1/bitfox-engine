@@ -11,6 +11,20 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 Releases are checked by fixed-node self-play (`tools/selfplay.py`). The version
 in `engine/Cargo.toml` is the version reported over UCI.
 
+## [2.1.0]
+
+### Search
+- Second cutoff-count tier: nodes whose child already produced several
+  fail-highs reduce late moves further. +15 Elo (pooled over 900 games).
+- Countermove heuristic: the quiet move that last refuted a given
+  opponent move is tried early. +15 Elo (pooled over 900 games).
+
+### GUI
+- Pieces lift and scale up on drag, with a shadow and a faded ghost left on
+  the origin square; moves slide into place with an eased 200ms animation.
+- Board rendering picks the sharper piece asset automatically once the
+  window is resized past the default size, avoiding blur.
+
 ## [2.0.0]
 
 Bitfox 2. Measured +74 Elo at fixed nodes and +133 Elo at real time control
