@@ -53,6 +53,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         updateCaptured();
     });
     connect(m_game, &GameController::historyRebuilt, this, &MainWindow::onHistoryRebuilt);
+    connect(m_game, &GameController::movePlayed, this,
+            [this](int from, int to, const QString &, bool) { m_boardView->animateMove(from, to); });
     connect(m_game, &GameController::statusText, m_panel, &SidePanel::setStatus);
     connect(m_game, &GameController::gameOver, this, &MainWindow::onGameOver);
     connect(m_game, &GameController::sound, this,

@@ -5,6 +5,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QTimer>
 
 #include "core/CoreBoard.h"
 
@@ -19,6 +20,13 @@ const QColor kArrow(0xFF, 0xA6, 0x29, 200);
 const QColor kHint(0x4C, 0xAF, 0x50, 215);
 
 const char *kNames[6] = {"pawn", "knight", "bishop", "rook", "queen", "king"};
+
+const int kAnimMs = 200;
+const qreal kDragScale = 1.2;
+
+qreal easeInOut(qreal t) {
+    return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+}
 }
 
 BoardView::BoardView(QWidget *parent) : QWidget(parent) {
@@ -26,13 +34,53 @@ BoardView::BoardView(QWidget *parent) : QWidget(parent) {
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
     loadPieces();
+
+    m_animTimer = new QTimer(this);
+    m_animTimer->setInterval(16);
+    connect(m_animTimer, &QTimer::timeout, this, [this] {
+        if (m_animClock.elapsed() >= kAnimMs) {
+            m_animTimer->stop();
+            m_animFrom = m_animTo = m_animPiece = -1;
+        }
+        update();
+    });
 }
 
 void BoardView::loadPieces() {
     for (int idx = 0; idx < 12; ++idx) {
         QString color = idx < 6 ? "white" : "black";
         m_pieces[idx].load(QString(":/pieces/%1_%2.png").arg(color, kNames[idx % 6]));
+        m_piecesHi[idx].load(QString(":/pieces-hi/%1_%2.png").arg(color, kNames[idx % 6]));
+
+        QPixmap shadow(m_piecesHi[idx].size());
+        shadow.fill(Qt::transparent);
+        QPainter sp(&shadow);
+        sp.drawPixmap(0, 0, m_piecesHi[idx]);
+        sp.setCompositionMode(QPainter::CompositionMode_SourceIn);
+        sp.fillRect(shadow.rect(), QColor(0, 0, 0));
+        sp.end();
+        m_shadows[idx] = shadow;
     }
+}
+
+void BoardView::animateMove(int from, int to) {
+    if (m_skipNextAnim) {
+        m_skipNextAnim = false;
+        return;
+    }
+    if (from < 0 || to < 0 || !m_board) {
+        return;
+    }
+    int piece = renderBoard()->pieceAt(to);
+    if (piece < 0) {
+        return;
+    }
+    m_animFrom = from;
+    m_animTo = to;
+    m_animPiece = piece;
+    m_animClock.restart();
+    m_animTimer->start();
+    update();
 }
 
 void BoardView::setBoard(CoreBoard *board) {
@@ -242,8 +290,14 @@ void BoardView::paintEvent(QPaintEvent *) {
         }
     }
 
+    qreal m = cell * 0.06;
+    bool animating = m_animPiece >= 0;
+    const QPixmap *pieceSet = cell > 80.0 ? m_piecesHi : m_pieces;
     for (int sq = 0; sq < 64; ++sq) {
         if (m_dragging && sq == m_dragFrom) {
+            continue;
+        }
+        if (animating && sq == m_animTo) {
             continue;
         }
         int piece = rb->pieceAt(sq);
@@ -251,8 +305,16 @@ void BoardView::paintEvent(QPaintEvent *) {
             continue;
         }
         QRectF r = squareRect(sq);
-        qreal m = cell * 0.06;
-        p.drawPixmap(r.adjusted(m, m, -m, -m).toRect(), m_pieces[piece]);
+        p.drawPixmap(r.adjusted(m, m, -m, -m).toRect(), pieceSet[piece]);
+    }
+
+    if (animating) {
+        qreal t = qBound(0.0, m_animClock.elapsed() / qreal(kAnimMs), 1.0);
+        qreal e = easeInOut(t);
+        QRectF a = squareRect(m_animFrom);
+        QRectF b = squareRect(m_animTo);
+        QRectF r(a.x() + (b.x() - a.x()) * e, a.y() + (b.y() - a.y()) * e, a.width(), a.height());
+        p.drawPixmap(r.adjusted(m, m, -m, -m).toRect(), pieceSet[m_animPiece]);
     }
 
     for (const auto &arrow : m_arrows) {
@@ -265,9 +327,17 @@ void BoardView::paintEvent(QPaintEvent *) {
     if (m_dragging && m_dragFrom >= 0) {
         int piece = rb->pieceAt(m_dragFrom);
         if (piece >= 0) {
-            qreal s = cell * 0.92;
-            p.drawPixmap(QRectF(m_dragPos.x() - s / 2, m_dragPos.y() - s / 2, s, s).toRect(),
-                         m_pieces[piece]);
+            QRectF ghost = squareRect(m_dragFrom);
+            p.setOpacity(0.25);
+            p.drawPixmap(ghost.adjusted(m, m, -m, -m).toRect(), pieceSet[piece]);
+            p.setOpacity(1.0);
+
+            qreal s = cell * kDragScale;
+            QRectF pr(m_dragPos.x() - s / 2, m_dragPos.y() - s / 2, s, s);
+            p.setOpacity(0.3);
+            p.drawPixmap(pr.translated(0, cell * 0.05).toRect(), m_shadows[piece]);
+            p.setOpacity(1.0);
+            p.drawPixmap(pr.toRect(), m_piecesHi[piece]);
         }
     }
 }
@@ -399,6 +469,7 @@ void BoardView::mouseReleaseEvent(QMouseEvent *event) {
     m_dragging = false;
     int to = squareAt(event->position());
     if (m_selected >= 0 && to >= 0 && to != m_dragFrom && m_targets.contains(to)) {
+        m_skipNextAnim = !m_selPremove;
         commitSelection(to);
         return;
     }

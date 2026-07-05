@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QList>
 #include <QPair>
 #include <QPixmap>
@@ -9,6 +10,7 @@
 #include <QWidget>
 
 class CoreBoard;
+class QTimer;
 
 class BoardView : public QWidget {
     Q_OBJECT
@@ -25,6 +27,7 @@ public:
     void setHumanColors(bool whiteHuman, bool blackHuman);
     void setPremoveEnabled(bool on);
     void setPremoves(const QVector<QPair<int, int>> &moves);
+    void animateMove(int from, int to);
     void clearSelection();
     void clearAnnotations();
     void refresh();
@@ -59,6 +62,8 @@ private:
     CoreBoard *m_board = nullptr;
     CoreBoard *m_pmBoard = nullptr;
     QPixmap m_pieces[12];
+    QPixmap m_piecesHi[12];
+    QPixmap m_shadows[12];
     bool m_interactive = true;
     bool m_flipped = false;
     int m_humanMask = 3;
@@ -77,6 +82,13 @@ private:
     int m_dragFrom = -1;
     bool m_dragging = false;
     QPointF m_dragPos;
+
+    QTimer *m_animTimer = nullptr;
+    QElapsedTimer m_animClock;
+    int m_animFrom = -1;
+    int m_animTo = -1;
+    int m_animPiece = -1;
+    bool m_skipNextAnim = false;
 
     int m_rmFrom = -1;
     QSet<int> m_redSquares;
