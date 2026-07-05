@@ -24,6 +24,25 @@ impl AtomicEntry {
     }
 }
 
+const CLUSTER_SIZE: usize = 3;
+
+#[repr(align(64))]
+struct Cluster {
+    entries: [AtomicEntry; CLUSTER_SIZE],
+}
+
+impl Cluster {
+    fn empty() -> Cluster {
+        Cluster {
+            entries: [
+                AtomicEntry::empty(),
+                AtomicEntry::empty(),
+                AtomicEntry::empty(),
+            ],
+        }
+    }
+}
+
 pub struct Probe {
     pub mv: Move,
     pub score: i32,
@@ -33,7 +52,7 @@ pub struct Probe {
 }
 
 pub struct Tt {
-    entries: Vec<AtomicEntry>,
+    clusters: Vec<Cluster>,
     mask: u64,
     generation: AtomicU8,
 }
@@ -41,7 +60,7 @@ pub struct Tt {
 impl Tt {
     pub fn new(mb: usize) -> Tt {
         let mut tt = Tt {
-            entries: Vec::new(),
+            clusters: Vec::new(),
             mask: 0,
             generation: AtomicU8::new(0),
         };
@@ -51,22 +70,25 @@ impl Tt {
 
     pub fn resize(&mut self, mb: usize) {
         let bytes = mb.max(1) * 1024 * 1024;
-        let raw = bytes / std::mem::size_of::<AtomicEntry>();
+        let cluster_bytes = std::mem::size_of::<Cluster>();
+        let raw = (bytes / cluster_bytes).max(1);
         let count = if raw.is_power_of_two() {
             raw
         } else {
             raw.next_power_of_two() / 2
         };
-        let count = count.max(1024);
-        self.entries = (0..count).map(|_| AtomicEntry::empty()).collect();
+        let count = count.max(1);
+        self.clusters = (0..count).map(|_| Cluster::empty()).collect();
         self.mask = (count - 1) as u64;
         self.generation.store(0, Ordering::Relaxed);
     }
 
     pub fn clear(&self) {
-        for e in self.entries.iter() {
-            e.data.store(0, Ordering::Relaxed);
-            e.meta.store(0, Ordering::Relaxed);
+        for c in self.clusters.iter() {
+            for e in c.entries.iter() {
+                e.data.store(0, Ordering::Relaxed);
+                e.meta.store(0, Ordering::Relaxed);
+            }
         }
         self.generation.store(0, Ordering::Relaxed);
     }
@@ -77,54 +99,62 @@ impl Tt {
     }
 
     pub fn hashfull(&self) -> u32 {
-        let sample = self.entries.len().min(1000);
-        if sample == 0 {
-            return 0;
-        }
+        let sample_clusters = self.clusters.len().clamp(1, 1000 / CLUSTER_SIZE);
         let generation = self.generation.load(Ordering::Relaxed);
-        let used = self.entries[..sample]
-            .iter()
-            .filter(|e| {
+        let mut used = 0usize;
+        let mut total = 0usize;
+        for c in &self.clusters[..sample_clusters] {
+            for e in c.entries.iter() {
+                total += 1;
                 let meta = e.meta.load(Ordering::Relaxed);
                 let depth = (meta & 0xff) as u8;
                 let gen = ((meta >> 8) as u8) >> 2;
-                depth != 0 && gen == generation
-            })
-            .count();
-        (used * 1000 / sample) as u32
+                if depth != 0 && gen == generation {
+                    used += 1;
+                }
+            }
+        }
+        if total == 0 {
+            return 0;
+        }
+        (used * 1000 / total) as u32
     }
 
     #[inline]
-    fn slot(&self, key: u64) -> usize {
+    fn cluster_idx(&self, key: u64) -> usize {
         (key & self.mask) as usize
     }
 
     pub fn probe(&self, key: u64, ply: usize) -> Option<Probe> {
-        let e = &self.entries[self.slot(key)];
-        let data = e.data.load(Ordering::Relaxed);
-        let meta = e.meta.load(Ordering::Relaxed);
-        let depth = (meta & 0xff) as u8;
-        if depth == 0 || (data >> 48) as u16 != (key >> 48) as u16 {
-            return None;
+        let key16 = (key >> 48) as u16;
+        let cluster = &self.clusters[self.cluster_idx(key)];
+        for e in cluster.entries.iter() {
+            let data = e.data.load(Ordering::Relaxed);
+            let meta = e.meta.load(Ordering::Relaxed);
+            let depth = (meta & 0xff) as u8;
+            if depth == 0 || (data >> 48) as u16 != key16 {
+                continue;
+            }
+            let gen_bound = ((meta >> 8) & 0xff) as u8;
+            let mut score = (data >> 16) as u16 as i16 as i32;
+            if score >= MATE_IN_MAX {
+                score -= ply as i32;
+            } else if score <= -MATE_IN_MAX {
+                score += ply as i32;
+            }
+            return Some(Probe {
+                mv: Move::from_raw((data >> 32) as u16),
+                score,
+                eval: data as u16 as i16 as i32,
+                depth: depth as i32 - 1,
+                bound: match gen_bound & 0x3 {
+                    1 => Bound::Exact,
+                    2 => Bound::Lower,
+                    _ => Bound::Upper,
+                },
+            });
         }
-        let gen_bound = ((meta >> 8) & 0xff) as u8;
-        let mut score = (data >> 16) as u16 as i16 as i32;
-        if score >= MATE_IN_MAX {
-            score -= ply as i32;
-        } else if score <= -MATE_IN_MAX {
-            score += ply as i32;
-        }
-        Some(Probe {
-            mv: Move::from_raw((data >> 32) as u16),
-            score,
-            eval: data as u16 as i16 as i32,
-            depth: depth as i32 - 1,
-            bound: match gen_bound & 0x3 {
-                1 => Bound::Exact,
-                2 => Bound::Lower,
-                _ => Bound::Upper,
-            },
-        })
+        None
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -139,13 +169,44 @@ impl Tt {
         ply: usize,
     ) {
         let key16 = (key >> 48) as u16;
-        let e = &self.entries[self.slot(key)];
+        let cluster = &self.clusters[self.cluster_idx(key)];
+        let generation = self.generation.load(Ordering::Relaxed);
+        let mut target = None;
+        for (i, e) in cluster.entries.iter().enumerate() {
+            let data = e.data.load(Ordering::Relaxed);
+            let meta = e.meta.load(Ordering::Relaxed);
+            let cur_depth = (meta & 0xff) as u8;
+            if cur_depth != 0 && (data >> 48) as u16 == key16 {
+                target = Some(i);
+                break;
+            }
+        }
+        let target = target.unwrap_or_else(|| {
+            let mut best = 0usize;
+            let mut best_quality = i32::MAX;
+            for (i, e) in cluster.entries.iter().enumerate() {
+                let meta = e.meta.load(Ordering::Relaxed);
+                let cur_depth = (meta & 0xff) as u8;
+                if cur_depth == 0 {
+                    return i;
+                }
+                let cur_gen = ((meta >> 8) as u8) >> 2;
+                let age = generation.wrapping_sub(cur_gen) & 0x3f;
+                let quality = cur_depth as i32 - age as i32 * 2;
+                if quality < best_quality {
+                    best_quality = quality;
+                    best = i;
+                }
+            }
+            best
+        });
+
+        let e = &cluster.entries[target];
         let data = e.data.load(Ordering::Relaxed);
         let meta = e.meta.load(Ordering::Relaxed);
         let cur_key = (data >> 48) as u16;
         let cur_depth = (meta & 0xff) as u8;
         let cur_gen = ((meta >> 8) as u8) >> 2;
-        let generation = self.generation.load(Ordering::Relaxed);
 
         let replace = cur_key != key16
             || bound == Bound::Exact
@@ -190,13 +251,13 @@ mod tests {
         for mb in [1usize, 4, 16, 64, 128, 256, 512] {
             let tt = Tt::new(mb);
             let requested = mb * 1024 * 1024;
-            let actual = tt.entries.len() * std::mem::size_of::<AtomicEntry>();
-            assert!(tt.entries.len().is_power_of_two());
+            let actual = tt.clusters.len() * std::mem::size_of::<Cluster>();
+            assert!(tt.clusters.len().is_power_of_two());
             assert!(
                 actual <= requested,
                 "{mb}MB: used {actual} bytes, over budget"
             );
-            let raw = requested / std::mem::size_of::<AtomicEntry>();
+            let raw = requested / std::mem::size_of::<Cluster>();
             if raw.is_power_of_two() {
                 assert_eq!(actual, requested, "{mb}MB: wasted half the requested Hash");
             }
@@ -207,11 +268,53 @@ mod tests {
     fn resize_rounds_down_for_non_power_of_two_sizes() {
         let tt = Tt::new(100);
         let requested = 100 * 1024 * 1024;
-        let raw = requested / std::mem::size_of::<AtomicEntry>();
-        let expected_entries = raw.next_power_of_two() / 2;
-        let actual = tt.entries.len() * std::mem::size_of::<AtomicEntry>();
-        assert!(tt.entries.len().is_power_of_two());
-        assert_eq!(tt.entries.len(), expected_entries);
-        assert!(actual <= requested);
+        let raw = requested / std::mem::size_of::<Cluster>();
+        let expected_clusters = raw.next_power_of_two() / 2;
+        assert!(tt.clusters.len().is_power_of_two());
+        assert_eq!(tt.clusters.len(), expected_clusters);
+    }
+
+    #[test]
+    fn cluster_holds_multiple_distinct_keys() {
+        let tt = Tt::new(1);
+        let idx = 5u64 & tt.mask;
+        let k0 = (0x1111u64 << 48) | idx;
+        let k1 = (0x2222u64 << 48) | idx;
+        let k2 = (0x3333u64 << 48) | idx;
+        tt.store(k0, Move::NONE, 10, 10, 5, Bound::Exact, 0);
+        tt.store(k1, Move::NONE, 20, 20, 5, Bound::Exact, 0);
+        tt.store(k2, Move::NONE, 30, 30, 5, Bound::Exact, 0);
+        assert_eq!(tt.probe(k0, 0).unwrap().score, 10);
+        assert_eq!(tt.probe(k1, 0).unwrap().score, 20);
+        assert_eq!(tt.probe(k2, 0).unwrap().score, 30);
+    }
+
+    #[test]
+    fn fourth_distinct_key_evicts_lowest_quality_slot() {
+        let tt = Tt::new(1);
+        let idx = 7u64 & tt.mask;
+        let k0 = (0x1111u64 << 48) | idx;
+        let k1 = (0x2222u64 << 48) | idx;
+        let k2 = (0x3333u64 << 48) | idx;
+        let k3 = (0x4444u64 << 48) | idx;
+        tt.store(k0, Move::NONE, 1, 1, 1, Bound::Exact, 0);
+        tt.store(k1, Move::NONE, 2, 2, 8, Bound::Exact, 0);
+        tt.store(k2, Move::NONE, 3, 3, 8, Bound::Exact, 0);
+        tt.store(k3, Move::NONE, 4, 4, 8, Bound::Exact, 0);
+        assert!(tt.probe(k0, 0).is_none());
+        assert_eq!(tt.probe(k1, 0).unwrap().score, 2);
+        assert_eq!(tt.probe(k2, 0).unwrap().score, 3);
+        assert_eq!(tt.probe(k3, 0).unwrap().score, 4);
+    }
+
+    #[test]
+    fn matching_key_is_updated_in_place_not_duplicated() {
+        let tt = Tt::new(1);
+        let idx = 9u64 & tt.mask;
+        let k0 = (0x1111u64 << 48) | idx;
+        tt.store(k0, Move::NONE, 1, 1, 2, Bound::Exact, 0);
+        tt.store(k0, Move::NONE, 99, 99, 10, Bound::Exact, 0);
+        assert_eq!(tt.probe(k0, 0).unwrap().score, 99);
+        assert_eq!(tt.probe(k0, 0).unwrap().depth, 10);
     }
 }
