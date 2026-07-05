@@ -26,3 +26,6 @@ opt-level = 1
 [dependencies]
 shakmaty = "0.30"
 shakmaty-syzygy = "0.28"
+
+[features]
+stats = []

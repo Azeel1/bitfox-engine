@@ -33,9 +33,10 @@ impl Search {
             pv.push_str(&self.pv[0][i].to_uci());
         }
         println!(
-            "info depth {depth} seldepth {} score {score_str} nodes {} nps {nps} time {elapsed} pv {pv}",
+            "info depth {depth} seldepth {} score {score_str} nodes {} nps {nps} hashfull {} time {elapsed} pv {pv}",
             self.seldepth.max(depth as usize),
-            self.nodes
+            self.nodes,
+            self.hashfull()
         );
     }
 }

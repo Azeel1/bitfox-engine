@@ -20,6 +20,30 @@ use std::time::{Duration, Instant};
 
 pub const PIECE_NONE: usize = 12;
 
+#[derive(Default, Clone, Copy)]
+pub struct SearchStats {
+    pub qnodes: u64,
+    pub tt_probes: u64,
+    pub tt_hits: u64,
+    pub tt_cutoffs: u64,
+    pub null_cutoffs: u64,
+    pub probcut_hits: u64,
+    pub lmr_researches: u64,
+    pub beta_cutoffs: u64,
+}
+
+// Zero cost unless built with `--features stats`; per-node counters are not
+// free enough to leave unconditionally on in the hot path.
+macro_rules! stat {
+    ($self:expr, $field:ident) => {
+        #[cfg(feature = "stats")]
+        {
+            $self.stats.$field += 1;
+        }
+    };
+}
+pub(crate) use stat;
+
 pub type ContHist = [[[[i16; 64]; 13]; 64]; 13];
 
 pub type QuietHist = [[[[[i32; 64]; 64]; 2]; 2]; 2];
@@ -52,6 +76,7 @@ pub struct Search {
     ss_piece: [usize; MAX_PLY + 4],
     ss_to: [usize; MAX_PLY + 4],
     cutoff_cnt: [i32; MAX_PLY + 4],
+    stats: SearchStats,
     pv: Box<[[Move; MAX_PLY + 1]; MAX_PLY + 1]>,
     pv_len: [usize; MAX_PLY + 1],
     lmr: [[i32; 64]; 64],
@@ -108,6 +133,7 @@ impl Search {
             ss_piece: [PIECE_NONE; MAX_PLY + 4],
             ss_to: [0; MAX_PLY + 4],
             cutoff_cnt: [0; MAX_PLY + 4],
+            stats: SearchStats::default(),
             pv: Box::new([[Move::NONE; MAX_PLY + 1]; MAX_PLY + 1]),
             pv_len: [0; MAX_PLY + 1],
             lmr,
@@ -174,6 +200,16 @@ impl Search {
     #[inline]
     pub fn root_pv(&self) -> &[Move] {
         &self.pv[0][..self.pv_len[0]]
+    }
+
+    #[inline]
+    pub fn stats(&self) -> &SearchStats {
+        &self.stats
+    }
+
+    #[inline]
+    pub fn hashfull(&self) -> u32 {
+        self.tt.hashfull()
     }
 }
 

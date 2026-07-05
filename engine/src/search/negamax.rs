@@ -1,4 +1,4 @@
-use super::{move_info, Search, PIECE_NONE};
+use super::{move_info, stat, Search, PIECE_NONE};
 use crate::board::Board;
 use crate::movegen::MoveList;
 use crate::tt::Bound;
@@ -50,6 +50,10 @@ impl Search {
 
         let key = board.key();
         let probe = self.tt.probe(key, ply);
+        stat!(self, tt_probes);
+        if probe.is_some() {
+            stat!(self, tt_hits);
+        }
         let tt_move = probe.as_ref().map(|p| p.mv).unwrap_or(Move::NONE);
         let tt_score = probe.as_ref().map(|p| p.score).unwrap_or(SCORE_NONE);
         let tt_depth = probe.as_ref().map(|p| p.depth).unwrap_or(0);
@@ -64,6 +68,7 @@ impl Search {
                         Bound::None => false,
                     };
                     if cut {
+                        stat!(self, tt_cutoffs);
                         return p.score;
                     }
                 }
@@ -140,6 +145,7 @@ impl Search {
                     return 0;
                 }
                 if score >= beta {
+                    stat!(self, null_cutoffs);
                     return if is_decisive(score) { beta } else { score };
                 }
             }
@@ -218,6 +224,7 @@ impl Search {
                         return 0;
                     }
                     if score >= probcut_beta {
+                        stat!(self, probcut_hits);
                         self.tt
                             .store(key, m, score, raw_eval, depth - 3, Bound::Lower, ply);
                         return score;
@@ -361,6 +368,7 @@ impl Search {
                 }
                 let mut s = -self.negamax(board, -alpha - 1, -alpha, new_depth - r, ply + 1);
                 if s > alpha && r > 0 {
+                    stat!(self, lmr_researches);
                     s = -self.negamax(board, -alpha - 1, -alpha, new_depth, ply + 1);
                 }
                 if s > alpha && s < beta {
@@ -385,6 +393,7 @@ impl Search {
                     if score >= beta {
                         bound = Bound::Lower;
                         self.cutoff_cnt[ply] += 1;
+                        stat!(self, beta_cutoffs);
                         let bonus = (depth * depth).min(1200);
                         if quiet {
                             self.update_killers(ply, m);

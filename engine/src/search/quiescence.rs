@@ -1,4 +1,4 @@
-use super::Search;
+use super::{stat, Search};
 use crate::board::Board;
 use crate::movegen::MoveList;
 use crate::tt::Bound;
@@ -17,6 +17,7 @@ impl Search {
             return 0;
         }
         self.nodes += 1;
+        stat!(self, qnodes);
         if self.nodes % 2048 == 0 {
             self.check_stop();
         }
