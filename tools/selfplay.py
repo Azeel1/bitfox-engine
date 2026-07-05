@@ -105,6 +105,10 @@ class Engine:
                 return
         raise TimeoutError(f"engine did not return {token}")
 
+    def set_hash(self, mb):
+        self._send(f"setoption name Hash value {mb}")
+        self.ready()
+
     def ready(self):
         self._send("isready")
         self._wait("readyok")
@@ -207,6 +211,8 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--openings-limit", type=int, default=2000)
     ap.add_argument("--builtin-openings", action="store_true")
+    ap.add_argument("--baseline-hash", type=int)
+    ap.add_argument("--candidate-hash", type=int)
     args = ap.parse_args()
 
     for path in (args.baseline, args.candidate):
@@ -219,6 +225,10 @@ def main():
 
     base = Engine(args.baseline)
     cand = Engine(args.candidate)
+    if args.baseline_hash is not None:
+        base.set_hash(args.baseline_hash)
+    if args.candidate_hash is not None:
+        cand.set_hash(args.candidate_hash)
 
     wins = losses = draws = 0
     pairs = (args.games + 1) // 2
