@@ -1,5 +1,5 @@
 use bitfox::board::Board;
-use bitfox::eval::Nnue;
+use bitfox::eval::{evaluate, Nnue};
 use bitfox::types::{Move, Piece, PieceType};
 
 fn move_info(board: &Board, m: Move) -> (Piece, Option<(Piece, usize)>) {
@@ -18,7 +18,12 @@ fn move_info(board: &Board, m: Move) -> (Piece, Option<(Piece, usize)>) {
 }
 
 fn walk(board: &mut Board, nnue: &mut Nnue, depth: u32) {
-    nnue.eval(board);
+    assert_eq!(
+        nnue.eval(board),
+        evaluate(board),
+        "incremental accumulator diverged from full refresh at {}",
+        board.to_fen()
+    );
     if depth == 0 {
         return;
     }
