@@ -34,11 +34,7 @@ struct Cluster {
 impl Cluster {
     fn empty() -> Cluster {
         Cluster {
-            entries: [
-                AtomicEntry::empty(),
-                AtomicEntry::empty(),
-                AtomicEntry::empty(),
-            ],
+            entries: std::array::from_fn(|_| AtomicEntry::empty()),
         }
     }
 }
@@ -248,18 +244,27 @@ mod tests {
 
     #[test]
     fn resize_uses_the_full_power_of_two_budget() {
-        for mb in [1usize, 4, 16, 64, 128, 256, 512] {
+        for mb in [1usize, 3, 4, 16, 64, 128, 256, 512] {
             let tt = Tt::new(mb);
             let requested = mb * 1024 * 1024;
-            let actual = tt.clusters.len() * std::mem::size_of::<Cluster>();
+            let cluster_bytes = std::mem::size_of::<Cluster>();
+            let raw = requested / cluster_bytes;
+            let expected_count = if raw.is_power_of_two() {
+                raw
+            } else {
+                raw.next_power_of_two() / 2
+            };
+            let actual = tt.clusters.len() * cluster_bytes;
             assert!(tt.clusters.len().is_power_of_two());
             assert!(
                 actual <= requested,
                 "{mb}MB: used {actual} bytes, over budget"
             );
-            let raw = requested / std::mem::size_of::<Cluster>();
+            assert_eq!(tt.clusters.len(), expected_count, "{mb}MB: unexpected cluster count");
             if raw.is_power_of_two() {
                 assert_eq!(actual, requested, "{mb}MB: wasted half the requested Hash");
+            } else {
+                assert!(actual < requested, "{mb}MB: should round down below the request");
             }
         }
     }

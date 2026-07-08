@@ -26,14 +26,23 @@ pub fn bench(args: &[String]) {
         .unwrap_or(DEFAULT_DEPTH);
     let mut search = Search::new(16);
     let mut total_nodes = 0u64;
+    #[cfg(feature = "stats")]
     let mut qnodes = 0u64;
+    #[cfg(feature = "stats")]
     let mut tt_probes = 0u64;
+    #[cfg(feature = "stats")]
     let mut tt_hits = 0u64;
+    #[cfg(feature = "stats")]
     let mut tt_cutoffs = 0u64;
+    #[cfg(feature = "stats")]
     let mut null_cutoffs = 0u64;
+    #[cfg(feature = "stats")]
     let mut probcut_hits = 0u64;
+    #[cfg(feature = "stats")]
     let mut lmr_researches = 0u64;
+    #[cfg(feature = "stats")]
     let mut beta_cutoffs = 0u64;
+    #[cfg(feature = "stats")]
     let mut hashfull_sum = 0u64;
     let start = Instant::now();
 
@@ -46,27 +55,33 @@ pub fn bench(args: &[String]) {
         };
         search.think(&mut board, &limits, false);
         total_nodes += search.node_count();
-        let s = search.stats();
-        qnodes += s.qnodes;
-        tt_probes += s.tt_probes;
-        tt_hits += s.tt_hits;
-        tt_cutoffs += s.tt_cutoffs;
-        null_cutoffs += s.null_cutoffs;
-        probcut_hits += s.probcut_hits;
-        lmr_researches += s.lmr_researches;
-        beta_cutoffs += s.beta_cutoffs;
-        hashfull_sum += search.hashfull() as u64;
+        #[cfg(feature = "stats")]
+        {
+            let s = search.stats();
+            qnodes += s.qnodes;
+            tt_probes += s.tt_probes;
+            tt_hits += s.tt_hits;
+            tt_cutoffs += s.tt_cutoffs;
+            null_cutoffs += s.null_cutoffs;
+            probcut_hits += s.probcut_hits;
+            lmr_researches += s.lmr_researches;
+            beta_cutoffs += s.beta_cutoffs;
+            hashfull_sum += search.hashfull() as u64;
+        }
     }
 
     let elapsed = start.elapsed().as_secs_f64();
     let nps = (total_nodes as f64 / elapsed.max(1e-9)) as u64;
     println!("{total_nodes} nodes {nps} nps");
 
-    let tt_hit_pct = (tt_hits * 100).checked_div(tt_probes).unwrap_or(0);
-    let hashfull_avg = hashfull_sum / POSITIONS.len() as u64;
-    println!(
-        "qnodes {qnodes} tt_hit% {tt_hit_pct} tt_cutoffs {tt_cutoffs} \
-null_cutoffs {null_cutoffs} probcut_hits {probcut_hits} \
-lmr_researches {lmr_researches} beta_cutoffs {beta_cutoffs} hashfull {hashfull_avg}"
-    );
+    #[cfg(feature = "stats")]
+    {
+        let tt_hit_pct = (tt_hits * 100).checked_div(tt_probes).unwrap_or(0);
+        let hashfull_avg = hashfull_sum / POSITIONS.len() as u64;
+        println!(
+            "qnodes {qnodes} tt_hit% {tt_hit_pct} tt_cutoffs {tt_cutoffs} \
+	null_cutoffs {null_cutoffs} probcut_hits {probcut_hits} \
+	lmr_researches {lmr_researches} beta_cutoffs {beta_cutoffs} hashfull {hashfull_avg}"
+        );
+    }
 }
