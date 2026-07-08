@@ -361,9 +361,6 @@ impl Search {
                     }
                     if self.cutoff_cnt[ply + 1] > 2 {
                         r += 1;
-                        if self.cutoff_cnt[ply + 1] > 4 {
-                            r += 1;
-                        }
                     }
                     let hist = self.history_get(us, from_th, to_th, m)
                         + self.conthist_get(ply, moved_pc, m.to().index());
