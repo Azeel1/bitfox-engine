@@ -42,3 +42,6 @@ cache/
 *.tmp
 *.prof
 *.trace
+
+# SPSA tuner state
+/tools/spsa_theta.json
