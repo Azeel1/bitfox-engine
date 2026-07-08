@@ -55,12 +55,6 @@ impl Search {
         if m == self.killers[ply][1] {
             return 600_000;
         }
-        if ply >= 1
-            && self.ss_piece[ply - 1] != super::PIECE_NONE
-            && m == self.countermove[self.ss_piece[ply - 1]][self.ss_to[ply - 1]]
-        {
-            return 650_000;
-        }
         let c = board.side();
         let from = m.from();
         let to = m.to();
