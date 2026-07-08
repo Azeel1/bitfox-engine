@@ -63,7 +63,11 @@ impl Search {
     }
 
     #[inline]
-    pub(super) fn soft_expired(&self) -> bool {
-        self.timed && self.start.elapsed() >= self.soft
+    pub(super) fn soft_expired(&self, stability: u32) -> bool {
+        if !self.timed {
+            return false;
+        }
+        let scale = [140u32, 115, 100, 92, 86, 82][stability.min(5) as usize];
+        self.start.elapsed() * 100 >= self.soft * scale
     }
 }

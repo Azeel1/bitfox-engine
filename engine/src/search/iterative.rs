@@ -47,6 +47,7 @@ impl Search {
         };
 
         let mut avg = crate::SCORE_NONE;
+        let mut stability = 0u32;
         for depth in 1..=self.max_depth {
             self.seldepth = 0;
             let score = self.aspiration(board, depth, &mut avg);
@@ -56,12 +57,17 @@ impl Search {
             self.best_score = score;
             self.completed_depth = depth;
             if !self.pv[0][0].is_none() {
+                if self.pv[0][0] == best {
+                    stability += 1;
+                } else {
+                    stability = 0;
+                }
                 best = self.pv[0][0];
             }
             if print {
                 self.print_info(depth, score);
             }
-            if self.is_main && self.soft_expired() {
+            if self.is_main && self.soft_expired(stability) {
                 break;
             }
             if is_decisive(score) && depth >= 4 {
