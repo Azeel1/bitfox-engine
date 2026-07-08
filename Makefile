@@ -3,11 +3,13 @@ BIN := $(ENGINE)/target/release/bitfox
 FEATURES :=
 FEATFLAG := $(if $(FEATURES),--features $(FEATURES))
 WIN_TARGET := x86_64-pc-windows-gnu
+EXE :=
 
 .PHONY: release build test perft divide run windows version fmt clippy clean help
 
 release:
 	cd $(ENGINE) && cargo build --release $(FEATFLAG)
+	$(if $(EXE),cp $(BIN) $(EXE))
 
 windows:
 	cd $(ENGINE) && cargo build --release --target $(WIN_TARGET) $(FEATFLAG)
