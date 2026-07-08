@@ -198,13 +198,27 @@ struct Accumulator {
     black: [i16; HL],
 }
 
+#[derive(Clone, Copy)]
+struct CacheEntry {
+    acc: [i16; HL],
+    pieces: [[crate::types::Bitboard; 6]; 2],
+}
+
+const CACHE_KEYS: usize = INPUT_BUCKETS * 2;
+
 pub struct Nnue {
     stack: Box<[Accumulator]>,
+    cache: Box<[[CacheEntry; CACHE_KEYS]; 2]>,
     idx: usize,
 }
 
 impl Default for Nnue {
     fn default() -> Nnue {
+        let mut seed = CacheEntry {
+            acc: [0; HL],
+            pieces: [[crate::types::Bitboard::EMPTY; 6]; 2],
+        };
+        seed.acc.copy_from_slice(&net().l0b);
         Nnue {
             stack: vec![
                 Accumulator {
@@ -214,16 +228,43 @@ impl Default for Nnue {
                 MAX_PLY + 8
             ]
             .into_boxed_slice(),
+            cache: Box::new([[seed; CACHE_KEYS]; 2]),
             idx: 0,
         }
     }
 }
 
 impl Nnue {
+    fn refresh_cached(&mut self, board: &Board, pov: Color, ply: usize) {
+        let p = Persp::new(board, pov);
+        let pi = (pov == Color::Black) as usize;
+        let key = p.bucket * 2 + (p.flip != 0) as usize;
+        let entry = &mut self.cache[pi][key];
+
+        for color in [Color::White, Color::Black] {
+            let ci = color.index();
+            for pt in PieceType::ALL {
+                let pti = pt.index();
+                let now = board.pieces(color, pt);
+                let was = entry.pieces[ci][pti];
+                for sq in now & !was {
+                    add_column(&mut entry.acc, col(p.feature(color, pti, sq.index())));
+                }
+                for sq in was & !now {
+                    sub_column(&mut entry.acc, col(p.feature(color, pti, sq.index())));
+                }
+                entry.pieces[ci][pti] = now;
+            }
+        }
+
+        let acc = pov_acc(&mut self.stack[ply], pov);
+        acc.copy_from_slice(&entry.acc);
+    }
+
     pub fn refresh(&mut self, board: &Board) {
         self.idx = 0;
-        refresh_one(&mut self.stack[0].white, board, Color::White);
-        refresh_one(&mut self.stack[0].black, board, Color::Black);
+        self.refresh_cached(board, Color::White, 0);
+        self.refresh_cached(board, Color::Black, 0);
     }
 
     pub fn eval(&self, board: &Board) -> i32 {
@@ -264,8 +305,7 @@ impl Nnue {
                 && pov == us
                 && king_bucket_changed(from, to, us);
             if refresh {
-                let acc = pov_acc(&mut self.stack[self.idx], pov);
-                refresh_one(acc, board_after, pov);
+                self.refresh_cached(board_after, pov, self.idx);
                 continue;
             }
 
