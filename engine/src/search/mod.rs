@@ -185,6 +185,10 @@ impl Search {
         self.tb.is_some()
     }
 
+    pub fn stop_signal(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.stop_signal)
+    }
+
     #[inline]
     pub fn best_score(&self) -> i32 {
         self.best_score
