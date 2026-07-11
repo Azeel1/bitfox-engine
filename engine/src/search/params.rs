@@ -54,7 +54,12 @@ pub const UCI_OPTIONS: &[ParamInfo] = &[
 
 impl Params {
     pub fn set(&mut self, name: &str, value: i32) -> bool {
-        match name {
+        let name = name.to_ascii_lowercase();
+        let Some(info) = UCI_OPTIONS.iter().find(|p| p.name.eq_ignore_ascii_case(&name)) else {
+            return false;
+        };
+        let value = value.clamp(info.min, info.max);
+        match name.as_str() {
             "razorbase" => self.razor_base = value,
             "razormult" => self.razor_mult = value,
             "rfpmargin" => self.rfp_margin = value,
@@ -69,5 +74,32 @@ impl Params {
             _ => return false,
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn out_of_range_values_are_clamped_not_stored_raw() {
+        let mut p = Params::default();
+        assert!(p.set("NmpEvalDiv", 0));
+        assert_eq!(p.nmp_eval_div, 50);
+        assert!(p.set("NmpEvalDiv", 100_000));
+        assert_eq!(p.nmp_eval_div, 400);
+    }
+
+    #[test]
+    fn lookup_and_apply_are_both_case_insensitive() {
+        let mut p = Params::default();
+        assert!(p.set("razorbase", 123));
+        assert_eq!(p.razor_base, 123);
+    }
+
+    #[test]
+    fn unknown_name_is_rejected() {
+        let mut p = Params::default();
+        assert!(!p.set("NotAThing", 1));
     }
 }

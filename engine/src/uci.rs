@@ -1,6 +1,8 @@
 use crate::board::Board;
 use crate::search::{Limits, Search, UCI_OPTIONS};
 use std::io::{BufRead, Write};
+use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 
 pub fn run() {
     let mut board = Board::startpos();
@@ -15,6 +17,11 @@ pub fn run() {
         }
     }
 
+    let stop_flag = search.stop_signal();
+    let mut search_slot = Some(search);
+    let (tx, rx) = mpsc::channel::<(Box<Search>, crate::types::Move)>();
+    let mut searching = false;
+
     let stdin = std::io::stdin();
     for line in stdin.lock().lines() {
         let line = match line {
@@ -22,6 +29,37 @@ pub fn run() {
             Err(_) => break,
         };
         let cmd = line.split_whitespace().next().unwrap_or("");
+
+        if searching {
+            match cmd {
+                "stop" => {
+                    stop_flag.store(true, Ordering::Relaxed);
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+                "isready" => {
+                    println!("readyok");
+                    let _ = std::io::stdout().flush();
+                    continue;
+                }
+                "quit" => {
+                    stop_flag.store(true, Ordering::Relaxed);
+                    if let Ok((_, best)) = rx.recv() {
+                        println!("bestmove {}", best.to_uci());
+                    }
+                    break;
+                }
+                _ => {
+                    if let Ok((s, best)) = rx.recv() {
+                        search_slot = Some(s);
+                        println!("bestmove {}", best.to_uci());
+                    }
+                    searching = false;
+                }
+            }
+        }
+
+        let search = search_slot.as_mut().unwrap();
         match cmd {
             "uci" => {
                 println!("id name Bitfox {}", env!("CARGO_PKG_VERSION"));
@@ -42,13 +80,21 @@ pub fn run() {
                 search.clear();
                 board = Board::startpos();
             }
-            "setoption" => set_option(&line, &mut search),
+            "setoption" => set_option(&line, search),
             "position" => set_position(&line, &mut board),
             "go" => {
                 let limits = parse_go(&line);
-                let best = search.think(&mut board, &limits, true);
-                println!("bestmove {}", best.to_uci());
+                stop_flag.store(false, Ordering::Relaxed);
+                let mut s = search_slot.take().unwrap();
+                let mut b = board.clone();
+                let tx = tx.clone();
+                std::thread::spawn(move || {
+                    let best = s.think(&mut b, &limits, true);
+                    let _ = tx.send((s, best));
+                });
+                searching = true;
             }
+            "stop" => {}
             "quit" => break,
             _ => {}
         }
@@ -134,11 +180,11 @@ fn set_option(line: &str, search: &mut Search) {
     if let (Some(name), Some(value)) = (name, value) {
         if name == "hash" {
             if let Ok(mb) = value.parse::<usize>() {
-                search.resize_tt(mb);
+                search.resize_tt(mb.clamp(1, 4096));
             }
         } else if name == "threads" {
             if let Ok(n) = value.parse::<usize>() {
-                search.set_threads(n);
+                search.set_threads(n.clamp(1, 256));
             }
         } else if name == "syzygypath" {
             let path = line
