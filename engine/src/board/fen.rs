@@ -38,13 +38,26 @@ impl Board {
             _ => Color::White,
         };
 
+        let has = |b: &Board, sq: Square, p: Piece| b.piece_on(sq) == Some(p);
+        let wk = Piece::new(Color::White, PieceType::King);
+        let wr = Piece::new(Color::White, PieceType::Rook);
+        let bk = Piece::new(Color::Black, PieceType::King);
+        let br = Piece::new(Color::Black, PieceType::Rook);
         if let Some(rights) = parts.next() {
             for c in rights.chars() {
                 match c {
-                    'K' => board.castling.0 |= Castling::WHITE_KING,
-                    'Q' => board.castling.0 |= Castling::WHITE_QUEEN,
-                    'k' => board.castling.0 |= Castling::BLACK_KING,
-                    'q' => board.castling.0 |= Castling::BLACK_QUEEN,
+                    'K' if has(&board, Square::new(4), wk) && has(&board, Square::new(7), wr) => {
+                        board.castling.0 |= Castling::WHITE_KING
+                    }
+                    'Q' if has(&board, Square::new(4), wk) && has(&board, Square::new(0), wr) => {
+                        board.castling.0 |= Castling::WHITE_QUEEN
+                    }
+                    'k' if has(&board, Square::new(60), bk) && has(&board, Square::new(63), br) => {
+                        board.castling.0 |= Castling::BLACK_KING
+                    }
+                    'q' if has(&board, Square::new(60), bk) && has(&board, Square::new(56), br) => {
+                        board.castling.0 |= Castling::BLACK_QUEEN
+                    }
                     _ => {}
                 }
             }
@@ -52,7 +65,14 @@ impl Board {
 
         board.ep = parts
             .next()
-            .and_then(|s| if s == "-" { None } else { Square::from_str(s) });
+            .and_then(|s| if s == "-" { None } else { Square::from_str(s) })
+            .filter(|&sq| {
+                let expected_rank = if board.side == Color::White { 5 } else { 2 };
+                let behind = Square::new(sq.raw() ^ 8);
+                sq.rank() == expected_rank
+                    && board.piece_on(behind)
+                        == Some(Piece::new(board.side.flip(), PieceType::Pawn))
+            });
 
         board.halfmove = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
         board.fullmove = parts.next().and_then(|s| s.parse().ok()).unwrap_or(1);
@@ -128,5 +148,42 @@ impl Board {
         }
         fen.push_str(&format!(" {} {}", self.halfmove, self.fullmove));
         fen
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn castling_right_without_matching_king_and_rook_is_dropped() {
+        let board = Board::from_fen("7k/8/8/8/8/8/8/K7 w K - 0 1").unwrap();
+        assert_eq!(board.castling.0, 0);
+    }
+
+    #[test]
+    fn castling_right_with_matching_king_and_rook_is_kept() {
+        let board = Board::from_fen("4k3/8/8/8/8/8/8/R3K3 w Q - 0 1").unwrap();
+        assert!(board.castling.has(Castling::WHITE_QUEEN));
+    }
+
+    #[test]
+    fn en_passant_square_on_the_wrong_rank_is_rejected() {
+        let board = Board::from_fen("4k3/8/8/8/8/8/3P4/4K3 w - e3 0 1").unwrap();
+        assert!(board.ep.is_none());
+    }
+
+    #[test]
+    fn en_passant_square_without_a_pawn_behind_it_is_rejected() {
+        let board = Board::from_fen("4k3/8/8/8/8/8/8/4K3 w - e6 0 1").unwrap();
+        assert!(board.ep.is_none());
+    }
+
+    #[test]
+    fn legitimate_en_passant_square_is_kept() {
+        let board =
+            Board::from_fen("rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2")
+                .unwrap();
+        assert_eq!(board.ep, Some(Square::from_str("e6").unwrap()));
     }
 }
