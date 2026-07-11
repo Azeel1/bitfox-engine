@@ -24,7 +24,7 @@ impl Search {
         if ply > self.seldepth {
             self.seldepth = ply;
         }
-        if board.is_draw() {
+        if board.is_forced_draw() {
             return DRAW;
         }
         if ply >= MAX_PLY {

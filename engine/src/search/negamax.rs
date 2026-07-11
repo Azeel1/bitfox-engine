@@ -23,7 +23,7 @@ impl Search {
         if self.stop {
             return 0;
         }
-        if !root && board.is_draw() {
+        if !root && board.is_forced_draw() {
             return DRAW;
         }
         if depth <= 0 {

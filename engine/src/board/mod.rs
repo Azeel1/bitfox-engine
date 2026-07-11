@@ -234,12 +234,54 @@ impl Board {
         {
             return false;
         }
-        let minors =
-            self.pieces[PieceType::Knight.index()] | self.pieces[PieceType::Bishop.index()];
-        minors.count() <= 1
+        let knights = self.pieces[PieceType::Knight.index()];
+        let bishops = self.pieces[PieceType::Bishop.index()];
+        if (knights | bishops).count() <= 1 {
+            return true;
+        }
+        const DARK_SQUARES: u64 = 0xAA55AA55AA55AA55;
+        knights.is_empty() && (bishops.0 & DARK_SQUARES == 0 || bishops.0 & !DARK_SQUARES == 0)
     }
 
     pub fn is_draw(&self) -> bool {
         self.halfmove >= 100 || self.is_repetition() || self.insufficient_material()
+    }
+
+    pub fn is_forced_draw(&mut self) -> bool {
+        if self.is_repetition() || self.insufficient_material() {
+            return true;
+        }
+        self.halfmove >= 100 && !self.generate_legal().is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mate_delivered_at_halfmove_100_is_not_a_draw() {
+        let mut board = Board::from_fen("7k/6Q1/5K2/8/8/8/8/8 b - - 100 1").unwrap();
+        assert!(!board.is_forced_draw());
+        assert!(board.generate_legal().is_empty());
+        assert!(board.in_check(Color::Black));
+    }
+
+    #[test]
+    fn non_mating_position_at_halfmove_100_is_a_draw() {
+        let mut board = Board::from_fen("7k/8/6K1/8/8/8/8/6Q1 b - - 100 1").unwrap();
+        assert!(board.is_forced_draw());
+    }
+
+    #[test]
+    fn same_colour_bishops_are_insufficient_material() {
+        let board = Board::from_fen("4k3/8/8/8/8/8/8/2B1K1b1 w - - 0 1").unwrap();
+        assert!(board.insufficient_material());
+    }
+
+    #[test]
+    fn opposite_colour_bishops_are_not_insufficient_material() {
+        let board = Board::from_fen("4k3/8/8/8/8/8/8/2B1K2b w - - 0 1").unwrap();
+        assert!(!board.insufficient_material());
     }
 }
