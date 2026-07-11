@@ -77,6 +77,10 @@ fn match_move(board: &mut Board, from: c_int, to: c_int, promo: c_int) -> Option
 }
 
 fn status_of(board: &mut Board) -> c_int {
+    let legal = board.generate_legal();
+    if legal.is_empty() {
+        return if board.in_check(board.side()) { 1 } else { 2 };
+    }
     if board.halfmove() >= 100 {
         return 3;
     }
@@ -85,10 +89,6 @@ fn status_of(board: &mut Board) -> c_int {
     }
     if board.insufficient_material() {
         return 5;
-    }
-    let legal = board.generate_legal();
-    if legal.is_empty() {
-        return if board.in_check(board.side()) { 1 } else { 2 };
     }
     0
 }
@@ -138,6 +138,9 @@ pub unsafe extern "C" fn cc_set_fen(ptr: *mut Board, fen: *const c_char) -> c_in
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_get_fen(ptr: *mut Board, out: *mut c_char, size: c_int) -> c_int {
+    if out.is_null() || size <= 0 {
+        return 0;
+    }
     let b = board_ref(ptr);
     let fen = b.to_fen();
     let bytes = fen.as_bytes();
