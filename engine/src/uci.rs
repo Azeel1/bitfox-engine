@@ -19,7 +19,7 @@ pub fn run() {
 
     let stop_flag = search.stop_signal();
     let mut search_slot = Some(search);
-    let (tx, rx) = mpsc::channel::<(Box<Search>, crate::types::Move)>();
+    let (tx, rx) = mpsc::channel::<Box<Search>>();
     let mut searching = false;
 
     let stdin = std::io::stdin();
@@ -44,15 +44,12 @@ pub fn run() {
                 }
                 "quit" => {
                     stop_flag.store(true, Ordering::Relaxed);
-                    if let Ok((_, best)) = rx.recv() {
-                        println!("bestmove {}", best.to_uci());
-                    }
+                    let _ = rx.recv();
                     break;
                 }
                 _ => {
-                    if let Ok((s, best)) = rx.recv() {
+                    if let Ok(s) = rx.recv() {
                         search_slot = Some(s);
-                        println!("bestmove {}", best.to_uci());
                     }
                     searching = false;
                 }
@@ -90,7 +87,9 @@ pub fn run() {
                 let tx = tx.clone();
                 std::thread::spawn(move || {
                     let best = s.think(&mut b, &limits, true);
-                    let _ = tx.send((s, best));
+                    println!("bestmove {}", best.to_uci());
+                    let _ = std::io::stdout().flush();
+                    let _ = tx.send(s);
                 });
                 searching = true;
             }
