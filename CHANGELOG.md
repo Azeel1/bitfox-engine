@@ -8,8 +8,47 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 - **MINOR** - a search or evaluation feature that passes self-play testing.
 - **PATCH** - a tuning tweak, bug fix, or maintenance change.
 
-Releases are checked by fixed-node self-play (`tools/selfplay.py`). The version
-in `engine/Cargo.toml` is the version reported over UCI.
+Releases are checked by self-play at real time control. The version in
+`engine/Cargo.toml` is the version reported over UCI.
+
+## [2.5.0]
+
+Measured about +60 Elo over 2.1.0 at short time control. The search and
+evaluation changes were each confirmed on their own by SPRT before being
+kept; the rest are correctness and interface fixes.
+
+### Search
+- The soft time limit now scales with how stable the best move has been
+  across iterations - it stops sooner once the move stops changing and
+  lingers while the choice is still moving. +13 Elo.
+
+### Evaluation
+- Accumulator updates are applied lazily on the first evaluation that
+  needs them, so moves whose node never gets evaluated (a transposition
+  cutoff, a pruned branch) pay nothing for the update. +24 Elo.
+- Each king bucket keeps its own cached accumulator, so a king move that
+  crosses a bucket boundary refreshes from the cached state by the piece
+  difference instead of rebuilding from scratch. +15 Elo.
+
+### Transposition table
+- The single-slot table is now organised into three-entry clusters, and a
+  resize no longer wastes half the requested memory - a request of N MB
+  now allocates N MB instead of N/2.
+
+### Correctness
+- A checkmate delivered on the hundredth half-move is scored as a win
+  rather than a fifty-move draw, and two bishops confined to one square
+  colour are recognised as insufficient material.
+- Malformed FEN input is normalised at parse time: castling rights with no
+  matching king and rook, and en passant squares with no pawn to capture,
+  are dropped instead of driving move generation into an illegal state.
+- Out-of-range `setoption` values are clamped to their advertised bounds
+  instead of being stored raw.
+
+### Interface
+- The search runs on its own thread, so `stop` and `isready` are answered
+  immediately during a search and `go infinite` can actually be
+  interrupted.
 
 ## [2.1.0]
 
