@@ -89,8 +89,8 @@ The engine currently has:
 
 - Bitboard board representation with magic-bitboard sliders, incremental Zobrist
   keys, make/unmake, SEE, and threat-square generation.
-- Staged, legal move generation, perft-verified against the standard positions
-  (startpos, Kiwipete, positions 3-6).
+- Pseudo-legal move generation with legality resolved on make, perft-verified
+  against the standard positions (startpos, Kiwipete, positions 3-6).
 - Search with iterative deepening, aspiration windows, principal variation
   search, quiescence, a shared atomic transposition table, pruning/reduction
   heuristics, and LazySMP multi-threading.
@@ -104,10 +104,11 @@ and search-parameter refinement.
 
 ## Strength
 
-Strength changes are checked with node-limited self-play
-(`tools/selfplay.py`) and an SPRT stop. For a rough external reference, Bitfox
-is also tested against Stockfish at fixed `UCI_Elo` levels under fast time
-controls.
+Strength changes are checked by self-play at a real time control on a local
+OpenBench instance, run as an SPRT against the current `main`. Fixed-node
+matches are used only as a quick smoke test: several changes that looked
+clearly positive at fixed nodes turned out neutral or negative once the clock
+was involved, so nothing is kept on a fixed-node result alone.
 
 Bitfox 1.1.0 is independently rated by
 [CCRL](https://computerchess.org.uk/ccrl/404/) at 3123 Elo (+11/-11), rank
@@ -122,7 +123,7 @@ Bitfox 1.1.0 is independently rated by
 │   ├── src/
 │   │   ├── types/          squares, pieces, moves, bitboards, scores, castling
 │   │   ├── board/          state, FEN, make/unmake, Zobrist, SEE, threats
-│   │   ├── movegen/         staged legal move generation, magic tables
+│   │   ├── movegen/         pseudo-legal move generation, magic tables
 │   │   ├── search/          iterative deepening, negamax, quiescence,
 │   │   │                    ordering, histories, correction history, time
 │   │   ├── eval/            NNUE inference, classical PSQT, embedded network
@@ -136,7 +137,7 @@ Bitfox 1.1.0 is independently rated by
 │   └── Cargo.toml
 ├── gui-qt/                 Qt 6 desktop board and UCI engine launcher
 ├── trainer/                NNUE training (Bullet) and the text->bulletformat converter
-├── tools/                  selfplay.py strength gate
+├── tools/                  selfplay.py fixed-node smoke test
 ├── data/openings/          opening positions used by self-play
 ├── docs/                   architecture, engine, performance, roadmap notes
 └── Makefile
@@ -151,8 +152,8 @@ A conventional alpha-beta engine on a bitboard core, evaluated with NNUE.
   non-pawn key per color), and make/unmake with an undo stack.
 - **Sliders.** Bishop, rook, and queen attacks use magic bitboards backed by
   precomputed tables (`movegen/magic.rs`).
-- **Move generation.** Moves are produced in stages and filtered to legal moves,
-  validated by the perft suite.
+- **Move generation.** Moves are produced pseudo-legally in one pass, with
+  illegal ones discovered on make, validated by the perft suite.
 - **Search.** Negamax PVS with aspiration windows, a shared atomic TT, null-move
   and ProbCut pruning, singular extensions, late move reductions, and a stack of
   history tables, parallelized with LazySMP.
@@ -243,9 +244,14 @@ installs GitHub releases without leaving the app.
 
 ## Self-play strength gate
 
+Strength-affecting changes are gated by an SPRT at a real time control on a
+local OpenBench instance, which builds both branches from source and plays them
+against each other.
+
 `tools/selfplay.py` plays paired, node-limited games between two engine binaries
-and reports score, Elo error bars, LOS, and an SPRT verdict. Use it as the
-strength gate for strength-affecting changes:
+and reports score, Elo error bars, LOS, and an SPRT verdict. It is useful as a
+quick check that a change is not broken, but a fixed-node result is not enough
+on its own to keep a change:
 
 ```sh
 python3 tools/selfplay.py BASELINE engine/target/release/bitfox --games 400
@@ -272,8 +278,8 @@ clean     remove engine, Qt, and native build artifacts
 Keep `cargo fmt` and `cargo clippy --release -- -D warnings` clean.
 Move-generation and board changes must keep the perft suite passing; add
 positions to `engine/tests/perft.rs` when fixing edge cases. Run `make test`
-before opening a pull request, and gate strength-affecting changes through
-`tools/selfplay.py`.
+before opening a pull request, and gate strength-affecting changes with a
+self-play match at a real time control.
 
 ## Acknowledgements
 

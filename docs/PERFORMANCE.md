@@ -8,11 +8,13 @@ lock-free transposition table.
 
 - **Move generation** is the cheapest path. Perft is pure generation and
   make/unmake with no evaluation, so it runs far faster than search.
-- **Search** pays for evaluation and the selectivity machinery. The NNUE
-  accumulator is updated incrementally on make/unmake and only fully refreshed
-  when the moving king crosses a bucket boundary, which keeps per-node
-  evaluation cheap; on Apple Silicon the accumulator and forward pass use NEON
-  SIMD.
+- **Search** pays for evaluation and the selectivity machinery. Accumulator
+  updates are deferred until an evaluation actually needs them, so nodes that
+  cut off before evaluating pay nothing; crossing a king bucket rebuilds from a
+  per-bucket cache by the piece difference instead of from scratch. On Apple
+  Silicon the accumulator adds and subtracts use NEON intrinsics. The output
+  layer deliberately does not: a hand-written NEON version of it was measurably
+  slower than what the autovectoriser produces from flat code.
 - **Threads** scale through LazySMP: helper threads share the transposition
   table, so raising the `Threads` option increases effective depth rather than
   raw single-thread nps.
@@ -45,7 +47,8 @@ For move-generation throughput, time perft:
 bitfox perft 6
 ```
 
-Single-machine `bench` nps is the right signal for micro-optimisations; for
-anything that changes what the search explores, use the self-play gate
-(`tools/selfplay.py`), which measures playing strength under a fixed node limit
-rather than raw speed.
+Single-machine `bench` nps is the right signal for micro-optimisations, and a
+change that is meant to be pure speed should leave the node count untouched -
+if the totals move, the search changed too and nps alone no longer tells you
+anything. For anything that changes what the search explores, use the self-play
+gate at a real time control rather than raw speed or fixed-node results.

@@ -14,7 +14,7 @@ The library is organised into focused modules under `engine/src/`:
 - `board/` - board state and the mailbox, plus FEN parsing (`fen.rs`),
   make/unmake (`make.rs`), Zobrist hashing (`zobrist.rs`), static exchange
   evaluation (`see.rs`), and threat-square generation (`threats.rs`);
-- `movegen/` - staged legal move generation and the magic-bitboard slider
+- `movegen/` - pseudo-legal move generation and the magic-bitboard slider
   tables (`magic.rs`);
 - `search/` - iterative deepening (`iterative.rs`), negamax PVS (`negamax.rs`),
   quiescence (`quiescence.rs`), move ordering (`ordering.rs`), the history
