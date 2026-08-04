@@ -30,6 +30,7 @@ pub struct SearchStats {
     pub tt_cutoffs: u64,
     pub null_cutoffs: u64,
     pub probcut_hits: u64,
+    pub lmr_reductions: u64,
     pub lmr_researches: u64,
     pub beta_cutoffs: u64,
 }

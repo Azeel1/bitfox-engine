@@ -370,6 +370,9 @@ impl Search {
                     r -= hist / 8192;
                     r = r.clamp(0, new_depth - 1);
                 }
+                if r > 0 {
+                    stat!(self, lmr_reductions);
+                }
                 let mut s = -self.negamax(board, -alpha - 1, -alpha, new_depth - r, ply + 1);
                 if s > alpha && r > 0 {
                     stat!(self, lmr_researches);
