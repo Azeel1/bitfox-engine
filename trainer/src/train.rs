@@ -3,7 +3,7 @@ use bullet_lib::{
         inputs::{get_num_buckets, ChessBucketsMirrored},
         outputs::MaterialCount,
     },
-    nn::{optimiser::AdamW, InitSettings, Shape},
+    nn::{optimiser::{AdamW, AdamWParams}, InitSettings, Shape},
     trainer::{
         save::SavedFormat,
         schedule::{lr, wdl, TrainingSchedule, TrainingSteps},
@@ -18,6 +18,8 @@ const QA: i16 = 255;
 const QB: i16 = 64;
 
 const NUM_OUTPUT_BUCKETS: usize = 8;
+const L2: usize = 16;
+const L3: usize = 32;
 
 #[rustfmt::skip]
 const BUCKET_LAYOUT: [usize; 32] = [
@@ -45,7 +47,7 @@ fn env_parse<T: std::str::FromStr>(key: &str, default: T) -> T {
 }
 
 fn main() {
-    let hl = env_parse("BITFOX_TRAIN_HL", 768);
+    let hl = env_parse("BITFOX_TRAIN_HL", 1024);
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
         .optimiser(AdamW)
@@ -64,11 +66,12 @@ fn main() {
                 .round()
                 .quantise::<i16>(QA),
             SavedFormat::id("l0b").round().quantise::<i16>(QA),
-            SavedFormat::id("l1w")
-                .round()
-                .quantise::<i16>(QB)
-                .transpose(),
-            SavedFormat::id("l1b").round().quantise::<i16>(QA * QB),
+            SavedFormat::id("l1w").transpose().round().quantise::<i8>(QB),
+            SavedFormat::id("l1b"),
+            SavedFormat::id("l2w").transpose(),
+            SavedFormat::id("l2b"),
+            SavedFormat::id("l3w").transpose(),
+            SavedFormat::id("l3b"),
         ])
         .loss_fn(|output, target| output.sigmoid().squared_error(target))
         .build(|builder, stm_inputs, ntm_inputs, output_buckets| {
@@ -76,15 +79,30 @@ fn main() {
             let expanded = l0f.repeat(NUM_INPUT_BUCKETS);
 
             let mut l0 = builder.new_affine("l0", 768 * NUM_INPUT_BUCKETS, hl);
+            l0.init_with_effective_input_size(32);
             l0.weights = l0.weights + expanded;
 
-            let l1 = builder.new_affine("l1", 2 * hl, NUM_OUTPUT_BUCKETS);
+            let l1 = builder.new_affine("l1", hl, NUM_OUTPUT_BUCKETS * L2);
+            let l2 = builder.new_affine("l2", L2, NUM_OUTPUT_BUCKETS * L3);
+            let l3 = builder.new_affine("l3", L3, NUM_OUTPUT_BUCKETS);
 
-            let stm_hidden = l0.forward(stm_inputs).screlu();
-            let ntm_hidden = l0.forward(ntm_inputs).screlu();
+            let ft = |input, start, end| l0.slice(start, end).forward(input).crelu();
+            let stm_hidden = ft(stm_inputs, 0, hl / 2) * ft(stm_inputs, hl / 2, hl);
+            let ntm_hidden = ft(ntm_inputs, 0, hl / 2) * ft(ntm_inputs, hl / 2, hl);
+
             let hidden = stm_hidden.concat(ntm_hidden);
-            l1.forward(hidden).select(output_buckets)
+            let hl2 = l1.forward(hidden).select(output_buckets).screlu();
+            let hl3 = l2.forward(hl2).select(output_buckets).screlu();
+            l3.forward(hl3).select(output_buckets)
         });
+
+    let clipping = AdamWParams {
+        max_weight: 0.99,
+        min_weight: -0.99,
+        ..Default::default()
+    };
+    trainer.optimiser.set_params_for_weight("l0w", clipping);
+    trainer.optimiser.set_params_for_weight("l0f", clipping);
 
     let net_id = env_string("BITFOX_TRAIN_ID", "bitfox");
     let data_path = env_string("BITFOX_TRAIN_DATA", "data/bitfox.data");

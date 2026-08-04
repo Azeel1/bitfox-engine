@@ -4,13 +4,17 @@ use std::sync::OnceLock;
 
 use crate::MAX_PLY;
 
-const HL: usize = 768;
+const HL: usize = 1024;
+const L2: usize = 16;
+const L3: usize = 32;
 const INPUT_BUCKETS: usize = 10;
 const OUTPUT_BUCKETS: usize = 8;
 const FEATURES: usize = 768 * INPUT_BUCKETS;
-const SCALE: i32 = 400;
+const SCALE: f32 = 400.0;
 const QA: i32 = 255;
 const QB: i32 = 64;
+const FT_SHIFT: i32 = 8;
+const L1_NORM: f32 = (1 << FT_SHIFT) as f32 / (QA * QA * QB) as f32;
 
 #[rustfmt::skip]
 const BUCKET_LAYOUT: [usize; 32] = [
@@ -28,29 +32,64 @@ struct Net {
     l0w: Vec<i16>,
     l0b: Vec<i16>,
     l1w: Vec<i16>,
-    l1b: Vec<i16>,
+    l1b: Vec<f32>,
+    l2w: Vec<f32>,
+    l2b: Vec<f32>,
+    l3w: Vec<f32>,
+    l3b: Vec<f32>,
     buckets: [usize; 64],
 }
+
+const RAW: &[u8] = include_bytes!("../../networks/bitfox.nnue");
+
+const EXPECTED_LEN: usize = (FEATURES * HL + HL) * 2
+    + OUTPUT_BUCKETS * L2 * HL
+    + (OUTPUT_BUCKETS * L2 + OUTPUT_BUCKETS * L3 * L2 + OUTPUT_BUCKETS * L3 + OUTPUT_BUCKETS * L3
+        + OUTPUT_BUCKETS)
+        * 4;
+
+const _: () = assert!(RAW.len() >= EXPECTED_LEN && RAW.len() - EXPECTED_LEN < 64);
 
 static NET: OnceLock<Net> = OnceLock::new();
 
 fn net() -> &'static Net {
     NET.get_or_init(|| {
-        const RAW: &[u8] = include_bytes!("../../networks/bitfox.nnue");
-        let read = |off: usize, len: usize| -> Vec<i16> {
-            (0..len)
-                .map(|i| i16::from_le_bytes([RAW[off + 2 * i], RAW[off + 2 * i + 1]]))
-                .collect()
-        };
-
         let mut o = 0;
-        let l0w = read(o, FEATURES * HL);
-        o += FEATURES * HL * 2;
-        let l0b = read(o, HL);
-        o += HL * 2;
-        let l1w = read(o, OUTPUT_BUCKETS * 2 * HL);
-        o += OUTPUT_BUCKETS * 2 * HL * 2;
-        let l1b = read(o, OUTPUT_BUCKETS);
+        let mut read_i16 = |len: usize| -> Vec<i16> {
+            let out = (0..len)
+                .map(|i| i16::from_le_bytes([RAW[o + 2 * i], RAW[o + 2 * i + 1]]))
+                .collect();
+            o += len * 2;
+            out
+        };
+        let l0w = read_i16(FEATURES * HL);
+        let l0b = read_i16(HL);
+
+        let l1w = RAW[o..o + OUTPUT_BUCKETS * L2 * HL]
+            .iter()
+            .map(|&b| b as i8 as i16)
+            .collect::<Vec<_>>();
+        o += OUTPUT_BUCKETS * L2 * HL;
+
+        let mut read_f32 = |len: usize| -> Vec<f32> {
+            let out = (0..len)
+                .map(|i| {
+                    f32::from_le_bytes([
+                        RAW[o + 4 * i],
+                        RAW[o + 4 * i + 1],
+                        RAW[o + 4 * i + 2],
+                        RAW[o + 4 * i + 3],
+                    ])
+                })
+                .collect();
+            o += len * 4;
+            out
+        };
+        let l1b = read_f32(OUTPUT_BUCKETS * L2);
+        let l2w = read_f32(OUTPUT_BUCKETS * L3 * L2);
+        let l2b = read_f32(OUTPUT_BUCKETS * L3);
+        let l3w = read_f32(OUTPUT_BUCKETS * L3);
+        let l3b = read_f32(OUTPUT_BUCKETS);
 
         const MIRROR: [usize; 8] = [0, 1, 2, 3, 3, 2, 1, 0];
         let mut buckets = [0usize; 64];
@@ -63,14 +102,18 @@ fn net() -> &'static Net {
             l0b,
             l1w,
             l1b,
+            l2w,
+            l2b,
+            l3w,
+            l3b,
             buckets,
         }
     })
 }
 
 #[inline]
-fn screlu(x: i16) -> i32 {
-    let v = (x as i32).clamp(0, QA);
+fn screlu(x: f32) -> f32 {
+    let v = x.clamp(0.0, 1.0);
     v * v
 }
 
@@ -171,17 +214,55 @@ fn forward(white: &[i16; HL], black: &[i16; HL], board: &Board) -> i32 {
 
     let bucket =
         ((board.occupancy().count() as i32 - 2) / 4).clamp(0, OUTPUT_BUCKETS as i32 - 1) as usize;
-    let w = &net.l1w[bucket * 2 * HL..bucket * 2 * HL + 2 * HL];
 
-    let mut output = 0i32;
-    for i in 0..HL {
-        output += screlu(stm_acc[i]) * w[i] as i32;
-        output += screlu(ntm_acc[i]) * w[HL + i] as i32;
+    let half = HL / 2;
+    let mut ft = [0i16; HL];
+    for (side, acc) in [stm_acc, ntm_acc].iter().enumerate() {
+        let dst = &mut ft[side * half..side * half + half];
+        for (i, d) in dst.iter_mut().enumerate() {
+            let a = (acc[i] as i32).clamp(0, QA);
+            let b = (acc[i + half] as i32).clamp(0, QA);
+            *d = ((a * b) >> FT_SHIFT) as i16;
+        }
     }
 
-    output /= QA;
-    output += net.l1b[bucket] as i32;
-    output * SCALE / (QA * QB)
+    let mut l1out = [0f32; L2];
+    let base = bucket * L2 * HL;
+    for j in (0..L2).step_by(4) {
+        let rows = &net.l1w[base + j * HL..base + (j + 4) * HL];
+        let (r0, rest) = rows.split_at(HL);
+        let (r1, rest) = rest.split_at(HL);
+        let (r2, r3) = rest.split_at(HL);
+        let mut s = [0i32; 4];
+        for i in 0..HL {
+            let f = ft[i] as i32;
+            s[0] += f * r0[i] as i32;
+            s[1] += f * r1[i] as i32;
+            s[2] += f * r2[i] as i32;
+            s[3] += f * r3[i] as i32;
+        }
+        for (k, &sum) in s.iter().enumerate() {
+            l1out[j + k] = screlu(sum as f32 * L1_NORM + net.l1b[bucket * L2 + j + k]);
+        }
+    }
+
+    let mut l2out = [0f32; L3];
+    for (j, out) in l2out.iter_mut().enumerate() {
+        let row = &net.l2w[(bucket * L3 + j) * L2..(bucket * L3 + j) * L2 + L2];
+        let mut sum = net.l2b[bucket * L3 + j];
+        for i in 0..L2 {
+            sum += l1out[i] * row[i];
+        }
+        *out = screlu(sum);
+    }
+
+    let row = &net.l3w[bucket * L3..bucket * L3 + L3];
+    let mut out = net.l3b[bucket];
+    for i in 0..L3 {
+        out += l2out[i] * row[i];
+    }
+
+    (out * SCALE) as i32
 }
 
 pub fn evaluate(board: &Board) -> i32 {
