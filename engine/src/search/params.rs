@@ -11,6 +11,8 @@ pub struct Params {
     pub lmp_base: i32,
     pub lmp_depth_mult: i32,
     pub history_bonus_max: i32,
+    pub lmr_base: i32,
+    pub lmr_div: i32,
 }
 
 impl Default for Params {
@@ -27,6 +29,8 @@ impl Default for Params {
             lmp_base: 2818,
             lmp_depth_mult: 1351,
             history_bonus_max: 1200,
+            lmr_base: 85,
+            lmr_div: 215,
         }
     }
 }
@@ -50,6 +54,8 @@ pub const UCI_OPTIONS: &[ParamInfo] = &[
     ParamInfo { name: "LmpBase", default: 2818, min: 1000, max: 5000 },
     ParamInfo { name: "LmpDepthMult", default: 1351, min: 500, max: 3000 },
     ParamInfo { name: "HistoryBonusMax", default: 1200, min: 400, max: 2400 },
+    ParamInfo { name: "LmrBase", default: 85, min: 0, max: 250 },
+    ParamInfo { name: "LmrDiv", default: 215, min: 150, max: 320 },
 ];
 
 impl Params {
@@ -71,6 +77,8 @@ impl Params {
             "lmpbase" => self.lmp_base = value,
             "lmpdepthmult" => self.lmp_depth_mult = value,
             "historybonusmax" => self.history_bonus_max = value,
+            "lmrbase" => self.lmr_base = value,
+            "lmrdiv" => self.lmr_div = value,
             _ => return false,
         }
         true

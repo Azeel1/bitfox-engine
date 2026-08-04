@@ -109,12 +109,8 @@ impl Search {
     }
 
     fn build(tt: Arc<Tt>, stop_signal: Arc<AtomicBool>, is_main: bool) -> Search {
-        let mut lmr = [[0i32; 64]; 64];
-        for (depth, row) in lmr.iter_mut().enumerate().skip(1) {
-            for (played, r) in row.iter_mut().enumerate().skip(1) {
-                *r = (0.85 + (depth as f32).ln() * (played as f32).ln() / 2.15) as i32;
-            }
-        }
+        let params = Params::default();
+        let lmr = build_lmr(&params);
         Search {
             tt,
             stop_signal,
@@ -136,7 +132,7 @@ impl Search {
             ss_to: [0; MAX_PLY + 4],
             cutoff_cnt: [0; MAX_PLY + 4],
             stats: SearchStats::default(),
-            params: Params::default(),
+            params,
             pv: Box::new([[Move::NONE; MAX_PLY + 1]; MAX_PLY + 1]),
             pv_len: [0; MAX_PLY + 1],
             lmr,
@@ -176,7 +172,11 @@ impl Search {
     }
 
     pub fn set_param(&mut self, name: &str, value: i32) -> bool {
-        self.params.set(name, value)
+        if !self.params.set(name, value) {
+            return false;
+        }
+        self.lmr = build_lmr(&self.params);
+        true
     }
 
     pub fn set_tablebase(&mut self, path: &str) -> bool {
@@ -222,6 +222,18 @@ impl Search {
     pub fn hashfull(&self) -> u32 {
         self.tt.hashfull()
     }
+}
+
+fn build_lmr(params: &Params) -> [[i32; 64]; 64] {
+    let base = params.lmr_base as f32 / 100.0;
+    let div = params.lmr_div as f32 / 100.0;
+    let mut lmr = [[0i32; 64]; 64];
+    for (depth, row) in lmr.iter_mut().enumerate().skip(1) {
+        for (played, r) in row.iter_mut().enumerate().skip(1) {
+            *r = (base + (depth as f32).ln() * (played as f32).ln() / div) as i32;
+        }
+    }
+    lmr
 }
 
 pub(super) fn move_info(
