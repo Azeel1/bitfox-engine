@@ -34,8 +34,6 @@ pub struct SearchStats {
     pub beta_cutoffs: u64,
 }
 
-// Zero cost unless built with `--features stats`; per-node counters are not
-// free enough to leave unconditionally on in the hot path.
 macro_rules! stat {
     ($self:expr, $field:ident) => {
         #[cfg(feature = "stats")]
