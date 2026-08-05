@@ -284,4 +284,80 @@ mod tests {
         let board = Board::from_fen("4k3/8/8/8/8/8/8/2B1K2b w - - 0 1").unwrap();
         assert!(!board.insufficient_material());
     }
+
+    fn keys_from_scratch(board: &Board) -> (u64, u64, [u64; 2], u64, u64) {
+        let mut key = 0u64;
+        let mut pawn = 0u64;
+        let mut non_pawn = [0u64; 2];
+        let mut minor = 0u64;
+        let mut major = 0u64;
+        for sq in 0..64u8 {
+            let s = Square::new(sq);
+            let Some(p) = board.piece_on(s) else { continue };
+            let k = zobrist::piece(p, s);
+            key ^= k;
+            let c = p.color().index();
+            match p.piece_type() {
+                PieceType::Pawn => pawn ^= k,
+                PieceType::Knight | PieceType::Bishop => {
+                    non_pawn[c] ^= k;
+                    minor ^= k;
+                }
+                PieceType::Rook | PieceType::Queen => {
+                    non_pawn[c] ^= k;
+                    major ^= k;
+                }
+                PieceType::King => {
+                    non_pawn[c] ^= k;
+                    minor ^= k;
+                    major ^= k;
+                }
+            }
+        }
+        key ^= zobrist::side(board.side);
+        key ^= zobrist::castling(board.castling.0);
+        if let Some(ep) = board.ep {
+            key ^= zobrist::en_passant(ep.file());
+        }
+        (key, pawn, non_pawn, minor, major)
+    }
+
+    fn assert_keys_consistent(board: &Board) {
+        let (key, pawn, non_pawn, minor, major) = keys_from_scratch(board);
+        let fen = board.to_fen();
+        assert_eq!(board.key, key, "main key diverged at {fen}");
+        assert_eq!(board.pawn_key, pawn, "pawn key diverged at {fen}");
+        assert_eq!(board.non_pawn_key, non_pawn, "non-pawn key diverged at {fen}");
+        assert_eq!(board.minor_key, minor, "minor key diverged at {fen}");
+        assert_eq!(board.major_key, major, "major key diverged at {fen}");
+    }
+
+    fn walk_keys(board: &mut Board, depth: u32) {
+        assert_keys_consistent(board);
+        if depth == 0 {
+            return;
+        }
+        let legal = board.generate_legal();
+        for i in 0..legal.len() {
+            let m = legal.moves[i];
+            board.make_move(m);
+            walk_keys(board, depth - 1);
+            board.unmake_move(m);
+            assert_keys_consistent(board);
+        }
+    }
+
+    #[test]
+    fn incremental_keys_match_a_fresh_computation() {
+        for fen in [
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+            "rnbqkbnr/pp1ppppp/8/2pP4/8/8/PPP1PPPP/RNBQKBNR w KQkq c6 0 3",
+            "n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1",
+        ] {
+            let mut board = Board::from_fen(fen).expect("valid test fen");
+            walk_keys(&mut board, 3);
+        }
+    }
 }
