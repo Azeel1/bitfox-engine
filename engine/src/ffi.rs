@@ -60,8 +60,17 @@ fn pack(m: Move) -> u32 {
     from | (to << 6) | (promo << 12) | (flag << 15)
 }
 
-unsafe fn board_ref<'a>(ptr: *mut Board) -> &'a mut Board {
-    &mut *ptr
+unsafe fn board_ref<'a>(ptr: *mut Board) -> Option<&'a mut Board> {
+    ptr.as_mut()
+}
+
+macro_rules! board_or {
+    ($ptr:expr, $fallback:expr) => {
+        match board_ref($ptr) {
+            Some(b) => b,
+            None => return $fallback,
+        }
+    };
 }
 
 fn match_move(board: &mut Board, from: c_int, to: c_int, promo: c_int) -> Option<Move> {
@@ -122,7 +131,10 @@ pub extern "C" fn cc_tt_resize(mb: c_int) {
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_set_fen(ptr: *mut Board, fen: *const c_char) -> c_int {
-    let b = board_ref(ptr);
+    if fen.is_null() {
+        return 0;
+    }
+    let b = board_or!(ptr, 0);
     let s = match CStr::from_ptr(fen).to_str() {
         Ok(s) => s,
         Err(_) => return 0,
@@ -141,7 +153,7 @@ pub unsafe extern "C" fn cc_get_fen(ptr: *mut Board, out: *mut c_char, size: c_i
     if out.is_null() || size <= 0 {
         return 0;
     }
-    let b = board_ref(ptr);
+    let b = board_or!(ptr, 0);
     let fen = b.to_fen();
     let bytes = fen.as_bytes();
     if bytes.len() + 1 > size as usize {
@@ -154,12 +166,15 @@ pub unsafe extern "C" fn cc_get_fen(ptr: *mut Board, out: *mut c_char, size: c_i
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_perft(ptr: *mut Board, depth: c_int) -> u64 {
-    board_ref(ptr).perft(depth.max(0) as u32)
+    board_or!(ptr, 0).perft(depth.max(0) as u32)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_gen_legal(ptr: *mut Board, out: *mut u32) -> c_int {
-    let b = board_ref(ptr);
+    if out.is_null() {
+        return 0;
+    }
+    let b = board_or!(ptr, 0);
     let legal = b.generate_legal();
     for i in 0..legal.len() {
         *out.add(i) = pack(legal.moves[i]);
@@ -169,7 +184,10 @@ pub unsafe extern "C" fn cc_gen_legal(ptr: *mut Board, out: *mut u32) -> c_int {
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_legal_to(ptr: *mut Board, from: c_int, out: *mut c_int) -> c_int {
-    let b = board_ref(ptr);
+    if out.is_null() {
+        return 0;
+    }
+    let b = board_or!(ptr, 0);
     let legal = b.generate_legal();
     let mut seen = 0u64;
     let mut count = 0;
@@ -193,10 +211,10 @@ pub unsafe extern "C" fn cc_premove_to(ptr: *mut Board, from: c_int, out: *mut c
         bishop_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks, rook_attacks,
     };
     use crate::types::Castling;
-    if !(0..64).contains(&from) {
+    if out.is_null() || !(0..64).contains(&from) {
         return 0;
     }
-    let b = board_ref(ptr);
+    let b = board_or!(ptr, 0);
     let sq = Square::new(from as u8);
     let piece = match b.piece_on(sq) {
         Some(p) => p,
@@ -279,7 +297,7 @@ pub unsafe extern "C" fn cc_do_move(
     to: c_int,
     promo: c_int,
 ) -> c_int {
-    let b = board_ref(ptr);
+    let b = board_or!(ptr, 0);
     match match_move(b, from, to, promo) {
         Some(m) => {
             b.make_move(m);
@@ -297,7 +315,10 @@ pub unsafe extern "C" fn cc_apply(
     promo: c_int,
     info: *mut MoveInfo,
 ) -> c_int {
-    let b = board_ref(ptr);
+    if info.is_null() {
+        return 0;
+    }
+    let b = board_or!(ptr, 0);
     let mi = &mut *info;
     *mi = MoveInfo {
         legal: 0,
@@ -330,7 +351,10 @@ pub unsafe extern "C" fn cc_search(
     movetime_ms: c_int,
     out: *mut SearchResult,
 ) {
-    let b = board_ref(ptr);
+    if out.is_null() {
+        return;
+    }
+    let Some(b) = board_ref(ptr) else { return };
     let limits = Limits {
         depth: if max_depth > 0 { Some(max_depth) } else { None },
         movetime: if movetime_ms > 0 {
@@ -381,7 +405,7 @@ pub unsafe extern "C" fn cc_piece_at(ptr: *mut Board, sq: c_int) -> c_int {
     if !(0..64).contains(&sq) {
         return -1;
     }
-    match board_ref(ptr).piece_on(Square::new(sq as u8)) {
+    match board_or!(ptr, -1).piece_on(Square::new(sq as u8)) {
         Some(p) => p.index() as c_int,
         None => -1,
     }
@@ -389,28 +413,31 @@ pub unsafe extern "C" fn cc_piece_at(ptr: *mut Board, sq: c_int) -> c_int {
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_side(ptr: *mut Board) -> c_int {
-    board_ref(ptr).side().index() as c_int
+    board_or!(ptr, 0).side().index() as c_int
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_in_check(ptr: *mut Board) -> c_int {
-    let b = board_ref(ptr);
+    let b = board_or!(ptr, 0);
     b.in_check(b.side()) as c_int
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_status(ptr: *mut Board) -> c_int {
-    status_of(board_ref(ptr))
+    status_of(board_or!(ptr, 0))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_evaluate(ptr: *mut Board) -> c_int {
-    evaluate(board_ref(ptr))
+    evaluate(board_or!(ptr, 0))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn cc_position_info(ptr: *mut Board, out: *mut PositionInfo) {
-    let b = board_ref(ptr);
+    if out.is_null() {
+        return;
+    }
+    let Some(b) = board_ref(ptr) else { return };
     let info = &mut *out;
     const VALUE: [c_int; 6] = [100, 320, 330, 500, 900, 0];
     let mut material = 0;
@@ -472,6 +499,40 @@ mod tests {
         let dests: std::collections::BTreeSet<_> = (0..count).map(|i| out[i as usize]).collect();
         assert!(dests.contains(&(Square::new(6).index() as c_int)));
         assert!(dests.contains(&(Square::new(2).index() as c_int)));
+    }
+
+    #[test]
+    fn a_null_board_is_refused_rather_than_dereferenced() {
+        let null = std::ptr::null_mut::<Board>();
+        let mut moves = [0u32; 256];
+        let mut squares = [0i32; 32];
+        let mut fen = [0i8; 128];
+        unsafe {
+            assert_eq!(cc_perft(null, 1), 0);
+            assert_eq!(cc_side(null), 0);
+            assert_eq!(cc_in_check(null), 0);
+            assert_eq!(cc_status(null), 0);
+            assert_eq!(cc_evaluate(null), 0);
+            assert_eq!(cc_piece_at(null, 0), -1);
+            assert_eq!(cc_gen_legal(null, moves.as_mut_ptr()), 0);
+            assert_eq!(cc_legal_to(null, 0, squares.as_mut_ptr()), 0);
+            assert_eq!(cc_premove_to(null, 0, squares.as_mut_ptr()), 0);
+            assert_eq!(cc_get_fen(null, fen.as_mut_ptr(), 128), 0);
+            assert_eq!(cc_do_move(null, 0, 0, 0), 0);
+        }
+    }
+
+    #[test]
+    fn a_null_output_buffer_is_refused() {
+        let mut board = Board::startpos();
+        let b = &mut board as *mut Board;
+        unsafe {
+            assert_eq!(cc_gen_legal(b, std::ptr::null_mut()), 0);
+            assert_eq!(cc_legal_to(b, 12, std::ptr::null_mut()), 0);
+            assert_eq!(cc_premove_to(b, 12, std::ptr::null_mut()), 0);
+            assert_eq!(cc_get_fen(b, std::ptr::null_mut(), 128), 0);
+            assert_eq!(cc_set_fen(b, std::ptr::null()), 0);
+        }
     }
 
     #[test]
