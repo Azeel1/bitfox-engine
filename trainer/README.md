@@ -29,8 +29,9 @@ buckets:
   The board is mirrored so a king on the e-h files folds onto a-d, halving the
   king geometry before bucketing.
 - **King buckets** - 10 buckets over the mirrored king square (`BUCKET_LAYOUT`).
-- **Feature transformer** - `HL = 768` neurons per perspective; the two
-  perspectives concatenate into a `2 * HL` accumulator.
+- **Feature transformer** - `HL = 768` neurons per perspective (override with
+  `BITFOX_TRAIN_HL`); the two perspectives concatenate into a `2 * HL`
+  accumulator.
 - **Activation** - SCReLU, `clamp(x, 0, 1)^2`.
 - **Output buckets** - 8, selected by piece count, so the head specialises by
   material.
@@ -59,8 +60,42 @@ cargo run --release --bin train
 CUDA_PATH=/usr/local/cuda cargo run --release --no-default-features --features cuda --bin train
 ```
 
-Set `batches_per_superbatch` to about `positions / 16384` for one epoch per
-superbatch, then size `end_superbatch` to the epochs you want.
+### Run settings
+
+Every knob is an environment variable read at startup, so a run is fully
+described by the command that launched it:
+
+| Variable | Default | Meaning |
+| -------- | ------- | ------- |
+| `BITFOX_TRAIN_ID` | `bitfox` | Name of the run; checkpoint directories are `<id>-<superbatch>` |
+| `BITFOX_TRAIN_DATA` | `data/bitfox.data` | Training data; several files can be joined with the platform path separator |
+| `BITFOX_TRAIN_OUTPUT` | `checkpoints` | Where checkpoint directories are written |
+| `BITFOX_TRAIN_HL` | see below | Feature transformer width |
+| `BITFOX_TRAIN_SUPERBATCHES` | 8 | Superbatches to run; also where the LR schedule bottoms out |
+| `BITFOX_TRAIN_BATCHES_PER_SUPERBATCH` | 1000 | Batches of 16384 positions per superbatch |
+| `BITFOX_TRAIN_SAVE_RATE` | 2 | Save a checkpoint every N superbatches |
+| `BITFOX_TRAIN_WDL` | 0.4 | Weight of the game result against the search score in the target |
+| `BITFOX_TRAIN_INITIAL_LR` | 0.001 | Learning rate at the start of the cosine decay |
+| `BITFOX_TRAIN_FINAL_LR` | `initial * 0.027` | Learning rate at the last superbatch |
+| `BITFOX_TRAIN_THREADS` | 6 | Data-loading threads |
+| `BITFOX_TRAIN_START_SUPERBATCH` | 1 | First superbatch, for continuing a schedule |
+| `BITFOX_TRAIN_RESUME` | unset | Checkpoint directory to resume from |
+
+Set `BITFOX_TRAIN_BATCHES_PER_SUPERBATCH` to about `positions / 16384` for one
+epoch per superbatch, then size `BITFOX_TRAIN_SUPERBATCHES` to the epochs you
+want. Keep `BITFOX_TRAIN_SAVE_RATE` low enough to get several checkpoints out of
+a run: the last one is not reliably the strongest, and the only way to know
+which is, is to play them.
+
+```sh
+BITFOX_TRAIN_ID=gen16 \
+BITFOX_TRAIN_DATA=runs/gen16-combined.data \
+BITFOX_TRAIN_OUTPUT=runs/gen16-ckpt \
+BITFOX_TRAIN_SUPERBATCHES=80 \
+BITFOX_TRAIN_BATCHES_PER_SUPERBATCH=6000 \
+BITFOX_TRAIN_SAVE_RATE=10 \
+cargo run --release --bin train
+```
 
 ## Experiments
 

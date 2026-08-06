@@ -139,7 +139,7 @@ Bitfox 1.1.0 is independently rated by
 ├── trainer/                NNUE training (Bullet) and the text->bulletformat converter
 ├── tools/                  selfplay.py fixed-node smoke test
 ├── data/openings/          opening positions used by self-play
-├── docs/                   architecture, engine, performance, roadmap notes
+├── docs/                   architecture, engine, and performance notes
 └── Makefile
 ```
 
@@ -161,8 +161,8 @@ A conventional alpha-beta engine on a bitboard core, evaluated with NNUE.
   incrementally through an accumulator. Networks are trained in `trainer/` from
   the engine's own self-play data.
 
-See `docs/ARCHITECTURE.md`, `docs/ENGINE.md`, `docs/PERFORMANCE.md`, and
-`docs/ROADMAP.md` for details.
+See `docs/ARCHITECTURE.md`, `docs/ENGINE.md`, and `docs/PERFORMANCE.md`
+for details.
 
 ## Perft and tests
 

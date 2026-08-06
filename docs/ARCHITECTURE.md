@@ -46,8 +46,10 @@ the Qt process driver when a side is assigned to an engine binary.
 
 NNUE networks are trained in the separate `trainer/` workspace, built on Bullet.
 The engine's `datagen` subcommand plays fixed-node self-play games and writes
-one `FEN | score | wdl` record per quiet position; `trainer/convert` turns that
-text into bulletformat, and the trainer produces a quantised network that the
-engine embeds at build time
+one `FEN | score | wdl` record per quiet position, adjudicating a game once one
+side is far enough ahead that playing it out would only produce positions the
+network already evaluates correctly; `trainer/convert` turns that text into
+bulletformat, and the trainer produces a quantised network that the engine
+embeds at build time
 (`include_bytes!("../../networks/bitfox.nnue")`). `trainer/` neither depends on
 nor modifies the engine crate.

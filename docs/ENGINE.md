@@ -78,13 +78,30 @@ cross-check.
 
 ## Correctness
 
-The test suite (`engine/tests/`, run by `cargo test --release`) covers:
+`cargo test --release` runs both the suites under `engine/tests/` and the unit
+tests beside the code:
 
 - perft against the standard positions;
 - SEE outcomes (`see.rs`);
 - evaluation behaviour (`eval.rs`);
 - NNUE inference, including an incremental-equals-from-scratch accumulator check
-  (`nnue.rs`).
+  (`nnue.rs`);
+- the same check for every Zobrist key the board maintains - main, pawn,
+  per-colour non-pawn, minor and major - walked over a legal tree and compared
+  against a fresh computation on the way down and after unmake;
+- transposition table sizing and cluster replacement;
+- FEN parsing of castling rights and en passant squares that do not match the
+  position;
+- UCI option clamping;
+- the bound on how much `cc_legal_to` and `cc_premove_to` may write for one
+  square, against what the board reserves for them.
+
+Two of these exist because the invariant they cover fails silently. A drifting
+Zobrist key corrupts the transposition table and correction history without
+crashing, and an over-long move list writes past a buffer in another process's
+address space. Both tests were checked by breaking the code on purpose to
+confirm they fail - a test for a silent bug is worth nothing until you have
+watched it catch one.
 
 Strength-affecting changes are additionally gated by self-play at a real time
 control on a local OpenBench instance, run as an SPRT against the current
