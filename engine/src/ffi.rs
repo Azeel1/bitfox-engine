@@ -473,4 +473,31 @@ mod tests {
         assert!(dests.contains(&(Square::new(6).index() as c_int)));
         assert!(dests.contains(&(Square::new(2).index() as c_int)));
     }
+
+    #[test]
+    fn per_square_output_fits_the_callers_buffer() {
+        const CALLER_BUFFER: usize = 32;
+        let mut worst = 0;
+        for fen in [
+            "3Q4/8/8/8/3Q4/8/8/K2Q3k w - - 0 1",
+            "k7/3PPP2/8/8/8/8/8/K7 w - - 0 1",
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        ] {
+            let mut board = Board::from_fen(fen).expect("valid test fen");
+            for from in 0..64 {
+                let mut out = [0i32; 256];
+                let legal =
+                    unsafe { cc_legal_to(&mut board as *mut Board, from, out.as_mut_ptr()) };
+                let premove =
+                    unsafe { cc_premove_to(&mut board as *mut Board, from, out.as_mut_ptr()) };
+                worst = worst.max(legal.max(premove) as usize);
+            }
+        }
+        assert!(
+            worst <= CALLER_BUFFER,
+            "wrote {worst} entries for one square, callers only reserve {CALLER_BUFFER}"
+        );
+    }
 }
