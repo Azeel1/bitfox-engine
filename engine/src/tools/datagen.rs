@@ -42,6 +42,9 @@ fn reserve_position(written: &AtomicUsize, target: usize) -> bool {
     }
 }
 
+const ADJUDICATE_SCORE: i32 = 2000;
+const ADJUDICATE_PLIES: i32 = 5;
+
 fn generate_game(
     rng: &mut Rng,
     search: &mut Search,
@@ -71,6 +74,7 @@ fn generate_game(
 
     search.clear();
     let mut samples: Vec<(String, i32, Color)> = Vec::new();
+    let mut decisive = 0i32;
     let result;
 
     loop {
@@ -109,6 +113,25 @@ fn generate_game(
 
         if !board.in_check(board.side()) && best.is_quiet() && score.abs() < 20_000 {
             samples.push((board.to_fen(), score, board.side()));
+        }
+
+        let white_score = if board.side() == Color::White {
+            score
+        } else {
+            -score
+        };
+        if white_score.abs() >= ADJUDICATE_SCORE {
+            if decisive != 0 && decisive.signum() != white_score.signum() {
+                decisive = white_score.signum();
+            } else {
+                decisive += white_score.signum();
+            }
+            if decisive.abs() >= ADJUDICATE_PLIES {
+                result = if decisive > 0 { 1.0 } else { 0.0 };
+                break;
+            }
+        } else {
+            decisive = 0;
         }
 
         board.make_move(best);
