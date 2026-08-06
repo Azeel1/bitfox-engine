@@ -265,3 +265,53 @@ fn zeroed_box<T>() -> Box<T> {
         Box::from_raw(ptr.cast())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::board::Board;
+
+    #[test]
+    fn helper_threads_return_a_legal_move_and_join() {
+        for threads in [1usize, 2, 4] {
+            let mut board = Board::from_fen(
+                "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            )
+            .expect("valid test position");
+            let legal = board.generate_legal();
+            let mut search = Search::new(8);
+            search.set_threads(threads);
+            let limits = Limits {
+                depth: Some(7),
+                ..Default::default()
+            };
+            let best = search.think(&mut board, &limits, false);
+            assert!(!best.is_none(), "threads={threads} produced no move");
+            let legal_moves = (0..legal.len()).map(|i| legal.moves[i]);
+            assert!(
+                legal_moves.into_iter().any(|m| m == best),
+                "threads={threads} produced {}, which is not legal here",
+                best.to_uci()
+            );
+        }
+    }
+
+    #[test]
+    fn helper_threads_stop_when_the_main_search_does() {
+        let mut board = Board::startpos();
+        let mut search = Search::new(8);
+        search.set_threads(4);
+        let limits = Limits {
+            movetime: Some(200),
+            ..Default::default()
+        };
+        let start = Instant::now();
+        let best = search.think(&mut board, &limits, false);
+        let elapsed = start.elapsed();
+        assert!(!best.is_none());
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "a 200ms search with four threads took {elapsed:?} to join"
+        );
+    }
+}
