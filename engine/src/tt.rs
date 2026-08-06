@@ -260,11 +260,18 @@ mod tests {
                 actual <= requested,
                 "{mb}MB: used {actual} bytes, over budget"
             );
-            assert_eq!(tt.clusters.len(), expected_count, "{mb}MB: unexpected cluster count");
+            assert_eq!(
+                tt.clusters.len(),
+                expected_count,
+                "{mb}MB: unexpected cluster count"
+            );
             if raw.is_power_of_two() {
                 assert_eq!(actual, requested, "{mb}MB: wasted half the requested Hash");
             } else {
-                assert!(actual < requested, "{mb}MB: should round down below the request");
+                assert!(
+                    actual < requested,
+                    "{mb}MB: should round down below the request"
+                );
             }
         }
     }

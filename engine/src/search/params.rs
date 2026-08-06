@@ -43,25 +43,93 @@ pub struct ParamInfo {
 }
 
 pub const UCI_OPTIONS: &[ParamInfo] = &[
-    ParamInfo { name: "RazorBase", default: 300, min: 0, max: 600 },
-    ParamInfo { name: "RazorMult", default: 200, min: 0, max: 400 },
-    ParamInfo { name: "RfpMargin", default: 80, min: 20, max: 200 },
-    ParamInfo { name: "NmpBase", default: 3, min: 1, max: 6 },
-    ParamInfo { name: "NmpEvalDiv", default: 200, min: 50, max: 400 },
-    ParamInfo { name: "NmpMax", default: 3, min: 1, max: 6 },
-    ParamInfo { name: "FutilityMult", default: 79, min: 20, max: 200 },
-    ParamInfo { name: "FutilityBase", default: 127, min: 0, max: 300 },
-    ParamInfo { name: "LmpBase", default: 2818, min: 1000, max: 5000 },
-    ParamInfo { name: "LmpDepthMult", default: 1351, min: 500, max: 3000 },
-    ParamInfo { name: "HistoryBonusMax", default: 1200, min: 400, max: 2400 },
-    ParamInfo { name: "LmrBase", default: 85, min: 0, max: 250 },
-    ParamInfo { name: "LmrDiv", default: 215, min: 150, max: 320 },
+    ParamInfo {
+        name: "RazorBase",
+        default: 300,
+        min: 0,
+        max: 600,
+    },
+    ParamInfo {
+        name: "RazorMult",
+        default: 200,
+        min: 0,
+        max: 400,
+    },
+    ParamInfo {
+        name: "RfpMargin",
+        default: 80,
+        min: 20,
+        max: 200,
+    },
+    ParamInfo {
+        name: "NmpBase",
+        default: 3,
+        min: 1,
+        max: 6,
+    },
+    ParamInfo {
+        name: "NmpEvalDiv",
+        default: 200,
+        min: 50,
+        max: 400,
+    },
+    ParamInfo {
+        name: "NmpMax",
+        default: 3,
+        min: 1,
+        max: 6,
+    },
+    ParamInfo {
+        name: "FutilityMult",
+        default: 79,
+        min: 20,
+        max: 200,
+    },
+    ParamInfo {
+        name: "FutilityBase",
+        default: 127,
+        min: 0,
+        max: 300,
+    },
+    ParamInfo {
+        name: "LmpBase",
+        default: 2818,
+        min: 1000,
+        max: 5000,
+    },
+    ParamInfo {
+        name: "LmpDepthMult",
+        default: 1351,
+        min: 500,
+        max: 3000,
+    },
+    ParamInfo {
+        name: "HistoryBonusMax",
+        default: 1200,
+        min: 400,
+        max: 2400,
+    },
+    ParamInfo {
+        name: "LmrBase",
+        default: 85,
+        min: 0,
+        max: 250,
+    },
+    ParamInfo {
+        name: "LmrDiv",
+        default: 215,
+        min: 150,
+        max: 320,
+    },
 ];
 
 impl Params {
     pub fn set(&mut self, name: &str, value: i32) -> bool {
         let name = name.to_ascii_lowercase();
-        let Some(info) = UCI_OPTIONS.iter().find(|p| p.name.eq_ignore_ascii_case(&name)) else {
+        let Some(info) = UCI_OPTIONS
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(&name))
+        else {
             return false;
         };
         let value = value.clamp(info.min, info.max);

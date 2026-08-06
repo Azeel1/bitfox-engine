@@ -327,7 +327,10 @@ mod tests {
         let fen = board.to_fen();
         assert_eq!(board.key, key, "main key diverged at {fen}");
         assert_eq!(board.pawn_key, pawn, "pawn key diverged at {fen}");
-        assert_eq!(board.non_pawn_key, non_pawn, "non-pawn key diverged at {fen}");
+        assert_eq!(
+            board.non_pawn_key, non_pawn,
+            "non-pawn key diverged at {fen}"
+        );
         assert_eq!(board.minor_key, minor, "minor key diverged at {fen}");
         assert_eq!(board.major_key, major, "major key diverged at {fen}");
     }

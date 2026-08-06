@@ -80,7 +80,9 @@ pub fn bench(args: &[String]) {
     #[cfg(feature = "stats")]
     {
         let tt_hit_pct = (tt_hits * 100).checked_div(tt_probes).unwrap_or(0);
-        let research_pct = (lmr_researches * 100).checked_div(lmr_reductions).unwrap_or(0);
+        let research_pct = (lmr_researches * 100)
+            .checked_div(lmr_reductions)
+            .unwrap_or(0);
         let hashfull_avg = hashfull_sum / POSITIONS.len() as u64;
         println!(
             "qnodes {qnodes} tt_hit% {tt_hit_pct} tt_cutoffs {tt_cutoffs} \

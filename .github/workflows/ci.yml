@@ -34,6 +34,18 @@ jobs:
         working-directory: engine
         run: cargo test --locked
 
+      - name: Test release
+        working-directory: engine
+        run: cargo test --release --locked
+
+      - name: Bench
+        working-directory: engine
+        run: cargo run --release --locked -- bench
+
       - name: Clippy
         working-directory: engine
-        run: cargo clippy --release --locked -- -D warnings
+        run: cargo clippy --release --locked --all-targets -- -D warnings
+
+      - name: Format
+        working-directory: engine
+        run: cargo fmt --check
