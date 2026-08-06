@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 impl Search {
     pub(super) fn prepare(&mut self, board: &Board, limits: &Limits) {
         self.nodes = 0;
+        self.published = 0;
         self.stats = super::SearchStats::default();
         self.stop = false;
         self.seldepth = 0;
@@ -43,20 +44,20 @@ impl Search {
     }
 
     pub(super) fn check_stop(&mut self) {
-        if self.is_main {
-            if self.timed && self.start.elapsed() >= self.hard {
+        let delta = self.nodes - self.published;
+        self.published = self.nodes;
+        let searched = self.shared_nodes.fetch_add(delta, Ordering::Relaxed) + delta;
+
+        if let Some(nl) = self.node_limit {
+            if searched >= nl {
                 self.stop = true;
             }
-            if let Some(nl) = self.node_limit {
-                if self.nodes >= nl {
-                    self.stop = true;
-                }
-            }
-            if self.stop {
-                self.stop_signal.store(true, Ordering::Relaxed);
-            } else if self.stop_signal.load(Ordering::Relaxed) {
-                self.stop = true;
-            }
+        }
+        if self.is_main && self.timed && self.start.elapsed() >= self.hard {
+            self.stop = true;
+        }
+        if self.stop {
+            self.stop_signal.store(true, Ordering::Relaxed);
         } else if self.stop_signal.load(Ordering::Relaxed) {
             self.stop = true;
         }

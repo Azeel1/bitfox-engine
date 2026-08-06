@@ -9,6 +9,7 @@ use std::sync::Arc;
 impl Search {
     pub fn think(&mut self, board: &mut Board, limits: &Limits, print: bool) -> Move {
         self.stop_signal.store(false, Ordering::Relaxed);
+        self.shared_nodes.store(0, Ordering::Relaxed);
         self.tt.new_search();
 
         if self.threads <= 1 {
@@ -19,11 +20,12 @@ impl Search {
             for _ in 1..self.threads {
                 let tt = Arc::clone(&self.tt);
                 let stop = Arc::clone(&self.stop_signal);
+                let counted = Arc::clone(&self.shared_nodes);
                 let tb = self.tb.clone();
                 let mut b = board.clone();
                 let lim = limits.clone();
                 scope.spawn(move || {
-                    let mut helper = Search::worker(tt, stop);
+                    let mut helper = Search::worker(tt, stop, counted);
                     helper.tb = tb;
                     helper.run(&mut b, &lim, false);
                 });

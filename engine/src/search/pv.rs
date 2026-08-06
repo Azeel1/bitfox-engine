@@ -14,7 +14,8 @@ impl Search {
 
     pub(super) fn print_info(&self, depth: i32, score: i32) {
         let elapsed = self.start.elapsed().as_millis().max(1) as u64;
-        let nps = self.nodes * 1000 / elapsed;
+        let searched = self.node_count();
+        let nps = searched * 1000 / elapsed;
         let score_str = if score.abs() >= MATE_IN_MAX {
             let mate = if score > 0 {
                 (MATE - score + 1) / 2
@@ -35,7 +36,7 @@ impl Search {
         println!(
             "info depth {depth} seldepth {} score {score_str} nodes {} nps {nps} hashfull {} time {elapsed} pv {pv}",
             self.seldepth.max(depth as usize),
-            self.nodes,
+            searched,
             self.hashfull()
         );
     }

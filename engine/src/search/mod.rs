@@ -16,7 +16,7 @@ pub use params::{Params, UCI_OPTIONS};
 use crate::tt::Tt;
 use crate::types::Move;
 use crate::MAX_PLY;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -60,6 +60,8 @@ const CONTCORR_MAX: i32 = 16418;
 pub struct Search {
     tt: Arc<Tt>,
     stop_signal: Arc<AtomicBool>,
+    shared_nodes: Arc<AtomicU64>,
+    published: u64,
     is_main: bool,
     threads: usize,
     tb: Option<Arc<syzygy::Syzygy>>,
@@ -100,20 +102,28 @@ impl Search {
         Search::build(
             Arc::new(Tt::new(tt_mb)),
             Arc::new(AtomicBool::new(false)),
+            Arc::new(AtomicU64::new(0)),
             true,
         )
     }
 
-    fn worker(tt: Arc<Tt>, stop_signal: Arc<AtomicBool>) -> Search {
-        Search::build(tt, stop_signal, false)
+    fn worker(tt: Arc<Tt>, stop_signal: Arc<AtomicBool>, shared_nodes: Arc<AtomicU64>) -> Search {
+        Search::build(tt, stop_signal, shared_nodes, false)
     }
 
-    fn build(tt: Arc<Tt>, stop_signal: Arc<AtomicBool>, is_main: bool) -> Search {
+    fn build(
+        tt: Arc<Tt>,
+        stop_signal: Arc<AtomicBool>,
+        shared_nodes: Arc<AtomicU64>,
+        is_main: bool,
+    ) -> Search {
         let params = Params::default();
         let lmr = build_lmr(&params);
         Search {
             tt,
             stop_signal,
+            shared_nodes,
+            published: 0,
             is_main,
             threads: 1,
             tb: None,
@@ -205,7 +215,7 @@ impl Search {
 
     #[inline]
     pub fn node_count(&self) -> u64 {
-        self.nodes
+        self.shared_nodes.load(Ordering::Relaxed).max(self.nodes)
     }
 
     #[inline]
@@ -292,6 +302,25 @@ mod tests {
                 legal_moves.into_iter().any(|m| m == best),
                 "threads={threads} produced {}, which is not legal here",
                 best.to_uci()
+            );
+        }
+    }
+
+    #[test]
+    fn a_node_limit_counts_every_thread() {
+        for threads in [1usize, 2, 4] {
+            let mut board = Board::startpos();
+            let mut search = Search::new(8);
+            search.set_threads(threads);
+            let limits = Limits {
+                nodes: Some(40_000),
+                ..Default::default()
+            };
+            search.think(&mut board, &limits, false);
+            let searched = search.node_count();
+            assert!(
+                searched <= 60_000,
+                "threads={threads} searched {searched} against a 40000 node limit"
             );
         }
     }
