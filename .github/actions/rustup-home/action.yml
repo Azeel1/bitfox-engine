@@ -1,9 +1,12 @@
-name: Set up a separate Rustup directory
-description: Keep Rust toolchain installations separate across jobs and attempts.
+name: Configure Rustup for the build
+description: Use a separate installation of the pinned Rust toolchain.
 runs:
   using: composite
   steps:
     - shell: bash
       env:
         JOB_RUSTUP_HOME: ${{ runner.temp }}/bitfox-rustup-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
-      run: printf 'RUSTUP_HOME=%s\n' "$JOB_RUSTUP_HOME" >> "$GITHUB_ENV"
+      run: |
+        toolchain=$(awk -F '"' '/^[[:space:]]*channel[[:space:]]*=/ { print $2; exit }' rust-toolchain.toml)
+        test -n "$toolchain"
+        printf 'RUSTUP_HOME=%s\nRUSTUP_TOOLCHAIN=%s\n' "$JOB_RUSTUP_HOME" "$toolchain" >> "$GITHUB_ENV"
