@@ -1,5 +1,6 @@
 use crate::board::Board;
 use crate::search::{Limits, Search};
+use crate::MAX_PLY;
 use std::time::Instant;
 
 const DEFAULT_DEPTH: i32 = 12;
@@ -19,12 +20,39 @@ const POSITIONS: &[&str] = &[
     "8/p3k3/1p6/2p5/2P5/1P6/P3K3/8 w - - 0 1",
 ];
 
-pub fn bench(args: &[String]) {
+fn settings(args: &[String]) -> (i32, usize, usize) {
+    assert!(args.len() <= 3, "usage: bench [depth] [threads] [hash_mb]");
     let depth: i32 = args
         .first()
-        .and_then(|s| s.parse().ok())
+        .map(|value| value.parse().expect("bench depth must be an integer"))
         .unwrap_or(DEFAULT_DEPTH);
-    let mut search = Search::new(16);
+    let threads: usize = args
+        .get(1)
+        .map(|value| value.parse().expect("bench threads must be an integer"))
+        .unwrap_or(1);
+    let hash_mb: usize = args
+        .get(2)
+        .map(|value| value.parse().expect("bench hash must be an integer"))
+        .unwrap_or(16);
+    assert!(
+        (1..=MAX_PLY as i32).contains(&depth),
+        "bench depth is outside the search range"
+    );
+    assert!(
+        (1..=256).contains(&threads),
+        "bench threads must be from 1 to 256"
+    );
+    assert!(
+        (1..=4096).contains(&hash_mb),
+        "bench hash must be from 1 to 4096 MB"
+    );
+    (depth, threads, hash_mb)
+}
+
+pub fn bench(args: &[String]) {
+    let (depth, threads, hash_mb) = settings(args);
+    let mut search = Search::new(hash_mb);
+    search.set_threads(threads);
     let mut total_nodes = 0u64;
     #[cfg(feature = "stats")]
     let mut qnodes = 0u64;
@@ -46,6 +74,8 @@ pub fn bench(args: &[String]) {
     let mut beta_cutoffs = 0u64;
     #[cfg(feature = "stats")]
     let mut hashfull_sum = 0u64;
+    #[cfg(feature = "stats")]
+    let mut smp_stats = crate::search::SearchStats::default();
     let start = Instant::now();
 
     for fen in POSITIONS {
@@ -70,12 +100,17 @@ pub fn bench(args: &[String]) {
             lmr_researches += s.lmr_researches;
             beta_cutoffs += s.beta_cutoffs;
             hashfull_sum += search.hashfull() as u64;
+            smp_stats.merge(s);
         }
     }
 
     let elapsed = start.elapsed().as_secs_f64();
     let nps = (total_nodes as f64 / elapsed.max(1e-9)) as u64;
-    println!("{total_nodes} nodes {nps} nps");
+    println!("simd {}", crate::eval::simd_backend());
+    println!(
+        "{total_nodes} nodes {nps} nps {} threads {} MB",
+        threads, hash_mb
+    );
 
     #[cfg(feature = "stats")]
     {
@@ -86,8 +121,32 @@ pub fn bench(args: &[String]) {
         let hashfull_avg = hashfull_sum / POSITIONS.len() as u64;
         println!(
             "qnodes {qnodes} tt_hit% {tt_hit_pct} tt_cutoffs {tt_cutoffs} \
-	null_cutoffs {null_cutoffs} probcut_hits {probcut_hits} \
-	lmr_reductions {lmr_reductions} lmr_researches {lmr_researches} research% {research_pct} beta_cutoffs {beta_cutoffs} hashfull {hashfull_avg}"
+            null_cutoffs {null_cutoffs} probcut_hits {probcut_hits} \
+            lmr_reductions {lmr_reductions} lmr_researches {lmr_researches} research% {research_pct} beta_cutoffs {beta_cutoffs} hashfull {hashfull_avg}"
         );
+        println!(
+            "smp_roots {} candidates {} disagreements {} \
+            main_wins {} helper_wins {} distance_roots {} excluded {} winner_depth_gap {}",
+            smp_stats.smp_roots,
+            smp_stats.smp_candidates,
+            smp_stats.smp_disagreements,
+            smp_stats.smp_main_wins,
+            smp_stats.smp_helper_wins,
+            smp_stats.smp_distance_roots,
+            smp_stats.smp_excluded,
+            smp_stats.smp_winner_depth_gap,
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bench_settings_are_exact_and_bounded() {
+        let args = ["13", "4", "64"].map(str::to_string);
+        assert_eq!(settings(&args), (13, 4, 64));
+        assert_eq!(settings(&[]), (DEFAULT_DEPTH, 1, 16));
     }
 }

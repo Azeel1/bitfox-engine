@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 #[derive(Default, Clone)]
 pub struct Limits {
     pub depth: Option<i32>,
@@ -9,4 +11,5 @@ pub struct Limits {
     pub movestogo: Option<u64>,
     pub nodes: Option<u64>,
     pub infinite: bool,
+    pub started_at: Option<Instant>,
 }

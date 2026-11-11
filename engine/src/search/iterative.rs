@@ -1,70 +1,52 @@
-use super::{Limits, Search};
+use super::Search;
 use crate::board::Board;
-use crate::is_decisive;
 use crate::types::Move;
-use crate::INFINITY;
-use std::sync::atomic::Ordering;
-use std::sync::Arc;
+use crate::{is_decisive, mated_in, DRAW, MATE_IN_MAX};
+use crate::{INFINITY, MAX_PLY};
 
 impl Search {
-    pub fn think(&mut self, board: &mut Board, limits: &Limits, print: bool) -> Move {
-        self.stop_signal.store(false, Ordering::Relaxed);
-        self.shared_nodes.store(0, Ordering::Relaxed);
-        self.tt.new_search();
-
-        if self.threads <= 1 {
-            return self.run(board, limits, print);
-        }
-
-        std::thread::scope(|scope| {
-            for _ in 1..self.threads {
-                let tt = Arc::clone(&self.tt);
-                let stop = Arc::clone(&self.stop_signal);
-                let counted = Arc::clone(&self.shared_nodes);
-                let tb = self.tb.clone();
-                let mut b = board.clone();
-                let lim = limits.clone();
-                scope.spawn(move || {
-                    let mut helper = Search::worker(tt, stop, counted);
-                    helper.tb = tb;
-                    helper.run(&mut b, &lim, false);
-                });
-            }
-            let best = self.run(board, limits, print);
-            self.stop_signal.store(true, Ordering::Relaxed);
-            best
-        })
-    }
-
-    fn run(&mut self, board: &mut Board, limits: &Limits, print: bool) -> Move {
-        self.prepare(board, limits);
+    pub(super) fn run_prepared(&mut self, board: &mut Board, print: bool) -> Move {
         self.nnue.refresh(board);
 
         let mut best = {
             let legal = board.generate_legal();
             if legal.is_empty() {
+                self.best_score = if board.in_check(board.side()) {
+                    mated_in(0)
+                } else {
+                    DRAW
+                };
+                self.publish_nodes();
                 return Move::NONE;
             }
             legal.moves[0]
         };
+        let mut completed_pv = [Move::NONE; MAX_PLY + 1];
+        completed_pv[0] = best;
+        let mut completed_pv_len = 1;
 
         let mut avg = crate::SCORE_NONE;
         let mut stability = 0u32;
         for depth in 1..=self.max_depth {
+            if self.stop_requested() {
+                break;
+            }
             self.seldepth = 0;
             let score = self.aspiration(board, depth, &mut avg);
-            if self.stop && depth > 1 {
+            if self.stop {
                 break;
             }
             self.best_score = score;
             self.completed_depth = depth;
-            if !self.pv[0][0].is_none() {
+            if self.pv_len[0] > 0 {
                 if self.pv[0][0] == best {
                     stability += 1;
                 } else {
                     stability = 0;
                 }
                 best = self.pv[0][0];
+                completed_pv_len = self.pv_len[0];
+                completed_pv[..completed_pv_len].copy_from_slice(&self.pv[0][..completed_pv_len]);
             }
             if print {
                 self.print_info(depth, score);
@@ -72,10 +54,13 @@ impl Search {
             if self.is_main && self.soft_expired(stability) {
                 break;
             }
-            if is_decisive(score) && depth >= 4 {
+            if !self.infinite && score >= MATE_IN_MAX && depth >= 4 {
                 break;
             }
         }
+        self.pv[0][..completed_pv_len].copy_from_slice(&completed_pv[..completed_pv_len]);
+        self.pv_len[0] = completed_pv_len;
+        self.publish_nodes();
         best
     }
 
@@ -85,7 +70,7 @@ impl Search {
             *avg = score;
             return score;
         }
-        let mut delta = 23 + *avg * *avg / 26394;
+        let mut delta = 20 + (*avg).abs() / 16;
         let mut alpha = (*avg - delta).max(-INFINITY);
         let mut beta = (*avg + delta).min(INFINITY);
         let mut reduction = 0;
@@ -95,22 +80,58 @@ impl Search {
                 return score;
             }
             if score <= alpha {
+                // fail low: widen down and go back to full depth
                 alpha = (score - delta).max(-INFINITY);
-                beta = (alpha + delta).min(beta);
-                delta += 26 * delta / 128;
+                reduction = 0;
+                delta += delta / 3;
             } else if score >= beta {
-                alpha = (beta - delta).max(alpha);
+                // fail high: widen up, and drop a ply unless the score is decisive
                 beta = (score + delta).min(INFINITY);
-                if !is_decisive(score) {
-                    reduction += 1;
+                reduction = if is_decisive(score) {
+                    reduction.min(1)
                 } else {
-                    reduction = reduction.min(1);
-                }
-                delta += 60 * delta / 128;
+                    reduction + 1
+                };
+                delta += delta / 2;
             } else {
                 *avg = (*avg + score) / 2;
                 return score;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::search::Limits;
+
+    #[test]
+    fn aspiration_recovers_from_failures_in_both_directions() {
+        for initial_avg in [-2000, 2000] {
+            let mut board = Board::from_fen("7k/5Q2/6K1/8/8/8/8/8 b - - 0 1").unwrap();
+            let mut search = Search::new(1);
+            search.prepare(&board, &Limits::default());
+            search.nnue.refresh(&board);
+            let mut avg = initial_avg;
+
+            assert_eq!(search.aspiration(&mut board, 4, &mut avg), DRAW);
+            assert_eq!(avg, initial_avg / 2);
+            assert!(!search.stop);
+        }
+    }
+
+    #[test]
+    fn stopped_aspiration_preserves_the_completed_average() {
+        let mut board = Board::startpos();
+        let mut search = Search::new(1);
+        search.prepare(&board, &Limits::default());
+        search.nnue.refresh(&board);
+        search.stop = true;
+        let mut avg = 2000;
+
+        search.aspiration(&mut board, 4, &mut avg);
+
+        assert_eq!(avg, 2000);
     }
 }
