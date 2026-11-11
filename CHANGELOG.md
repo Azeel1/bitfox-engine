@@ -11,6 +11,54 @@ Versions follow [semantic versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
 Releases are checked by self-play at real time control. The version in
 `engine/Cargo.toml` is the version reported over UCI.
 
+## [3.0.0]
+
+Bitfox 3. Measured +300 Elo over 2.5.0 at 8+0.08 (+295 -16 =89 across 400
+games, played before the SIMD kernels went in).
+
+### Evaluation
+- Ship the `gen18` network, trained on 914.6M Bitfox self-play positions.
+- Share a single 768-wide architecture contract (`eval/contract.rs`) between
+  the engine evaluator and the Bullet trainer.
+- Add AVX-512, AVX2 and SSE2 kernels for the accumulator and output layer,
+  picked at startup, and embed the network as an aligned static. Node counts
+  are unchanged; the default x86-64 build measured about 24% faster on an
+  Intel Xeon.
+- Refuse to build with a network whose weights could overflow the int16
+  accumulator or output products.
+
+### Search
+- Replace the pruning, aspiration, and correction-history formulas adapted from
+  [Reckless](https://github.com/codedeliveryservice/Reckless) (AGPL-3.0) in
+  versions up to 2.5.0 with Bitfox's own parameterized search and correction
+  terms, tunable via UCI spin options.
+- Scale noisy SEE pruning thresholds by capture history and prevent consecutive
+  null-move searches.
+- Bucket the transposition table key and correction history by the fifty-move
+  clock, and disable direct TT score cutoffs near the fifty-move draw boundary.
+- Organise the transposition table into 64-byte cache-line-aligned clusters of
+  four 128-bit atomic full-key entries, with TT prefetching.
+- Reuse persistent LazySMP helper threads across searches and count nodes across
+  all active workers.
+
+### Correctness
+- Check king safety throughout SEE exchanges, including discovered checks,
+  back-rank promotion recaptures, and king captures.
+- Test quiet pawn-push legality directly without mutating board state.
+- Preserve checkmate and stalemate scores at ply and quiescence boundaries,
+  including achieved checkmate when Syzygy returns a tablebase loss.
+- Keep `go infinite` searches open until `stop` or `quit` even when a depth
+  limit is reached or the root position is terminal.
+- Validate null pointers and caller buffer capacities at the `cc_*` C ABI
+  boundary, and add owned searcher handles for the GUI.
+
+### Desktop
+- Add in-app desktop update checks (`Settings -> Check for application updates...`)
+  with version, platform, size, and SHA-256 verification before launching an
+  installer or archive.
+- Restore the board cursor cleanly if the window closes while a hint search is
+  running.
+
 ## [2.5.0]
 
 Measured about +60 Elo over 2.1.0 at short time control. The search and
