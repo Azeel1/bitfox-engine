@@ -4,8 +4,10 @@ NNUE training for the bitfox chess engine, built on
 [Bullet](https://github.com/jw1912/bullet). The default build uses Metal;
 CUDA is available through the `cuda` feature.
 
-This directory is self-contained: it neither depends on nor modifies the engine
-crate under `engine/`. Its only product is a quantised network the engine loads.
+The trainer is a separate Cargo package that imports
+`engine/src/eval/contract.rs` so training and inference share the same
+network layout. It does not modify the engine crate; a selected quantised
+network is copied into the engine in a separate step.
 
 ## Pipeline
 
@@ -15,6 +17,8 @@ engine datagen  ->  text (fen | score | wdl)  ->  convert  ->  *.data  ->  Bulle
 
 1. `bitfox datagen` plays fixed-node self-play games and writes one line per
    quiet position: `FEN | score | wdl`, both white-relative (`DATAFORMAT.md`).
+   A seed and worker count produce the same worker streams and output order on
+   repeated runs.
 2. `convert/` turns that text into a `bulletformat` `ChessBoard` file (`.data`).
 3. `src/train.rs` configures the trainer and streams the records on the GPU.
 4. The run writes checkpoints under `checkpoints/`; each holds `quantised.bin`,
@@ -29,9 +33,8 @@ buckets:
   The board is mirrored so a king on the e-h files folds onto a-d, halving the
   king geometry before bucketing.
 - **King buckets** - 10 buckets over the mirrored king square (`BUCKET_LAYOUT`).
-- **Feature transformer** - `HL = 768` neurons per perspective (override with
-  `BITFOX_TRAIN_HL`); the two perspectives concatenate into a `2 * HL`
-  accumulator.
+- **Feature transformer** - the shared contract fixes `HL = 768` neurons per
+  perspective; the two perspectives concatenate into a `2 * HL` accumulator.
 - **Activation** - SCReLU, `clamp(x, 0, 1)^2`.
 - **Output buckets** - 8, selected by piece count, so the head specialises by
   material.
@@ -43,21 +46,24 @@ buckets:
 - Output layer (`l1`): int16 weights scaled `QB = 64`, biases `QA * QB`.
 - `SCALE = 400` maps sigmoid space back to centipawns.
 
-`HL`, `BUCKET_LAYOUT`, `NUM_OUTPUT_BUCKETS`, `QA`, `QB`, `SCALE` are the contract
-between trainer and engine - change them in both `src/train.rs` and the engine's
-`eval/nnue.rs`.
+`engine/src/eval/contract.rs` defines `HL`, `BUCKET_LAYOUT`, the input and
+output bucket counts, `QA`, `QB`, `SCALE`, and the encoded network size for both
+`eval/nnue.rs` and `trainer/src/train.rs`.
 
 ## Building and running
 
+Run these Cargo commands from `trainer/`. The experiment commands below run
+from the repository root.
+
 ```
 # convert datagen text to the training format
-cargo run --release --manifest-path convert/Cargo.toml -- data.txt data/bitfox.data
+cargo run --release --locked --manifest-path convert/Cargo.toml -- data.txt data/bitfox.data
 
 # train with the default Metal backend
-cargo run --release --bin train
+cargo run --release --locked --bin train
 
 # or train with CUDA
-CUDA_PATH=/usr/local/cuda cargo run --release --no-default-features --features cuda --bin train
+CUDA_PATH=/usr/local/cuda cargo run --release --locked --no-default-features --features cuda --bin train
 ```
 
 ### Run settings
@@ -70,7 +76,8 @@ described by the command that launched it:
 | `BITFOX_TRAIN_ID` | `bitfox` | Name of the run; checkpoint directories are `<id>-<superbatch>` |
 | `BITFOX_TRAIN_DATA` | `data/bitfox.data` | Training data; several files can be joined with the platform path separator |
 | `BITFOX_TRAIN_OUTPUT` | `checkpoints` | Where checkpoint directories are written |
-| `BITFOX_TRAIN_HL` | see below | Feature transformer width |
+| `BITFOX_TRAIN_HL` | `768` | Compatibility check; any other value is rejected |
+| `BITFOX_TRAIN_SEED` | `198273612` | Deterministic weight-initialisation seed |
 | `BITFOX_TRAIN_SUPERBATCHES` | 8 | Superbatches to run; also where the LR schedule bottoms out |
 | `BITFOX_TRAIN_BATCHES_PER_SUPERBATCH` | 1000 | Batches of 16384 positions per superbatch |
 | `BITFOX_TRAIN_SAVE_RATE` | 2 | Save a checkpoint every N superbatches |
@@ -78,8 +85,8 @@ described by the command that launched it:
 | `BITFOX_TRAIN_INITIAL_LR` | 0.001 | Learning rate at the start of the cosine decay |
 | `BITFOX_TRAIN_FINAL_LR` | `initial * 0.027` | Learning rate at the last superbatch |
 | `BITFOX_TRAIN_THREADS` | 6 | Data-loading threads |
-| `BITFOX_TRAIN_START_SUPERBATCH` | 1 | First superbatch, for continuing a schedule |
-| `BITFOX_TRAIN_RESUME` | unset | Checkpoint directory to resume from |
+| `BITFOX_TRAIN_START_SUPERBATCH` | 1 | First superbatch; values above 1 require `BITFOX_TRAIN_RESUME` |
+| `BITFOX_TRAIN_RESUME` | unset | Checkpoint directory used to resume a schedule; required exactly when the first superbatch is above 1, and rejected when it is 1 |
 
 Set `BITFOX_TRAIN_BATCHES_PER_SUPERBATCH` to about `positions / 16384` for one
 epoch per superbatch, then size `BITFOX_TRAIN_SUPERBATCHES` to the epochs you
@@ -88,13 +95,15 @@ a run: the last one is not reliably the strongest, and the only way to know
 which is, is to play them.
 
 ```sh
-BITFOX_TRAIN_ID=gen16 \
+BITFOX_TRAIN_ID=gen16-sl768 \
 BITFOX_TRAIN_DATA=runs/gen16-combined.data \
-BITFOX_TRAIN_OUTPUT=runs/gen16-ckpt \
-BITFOX_TRAIN_SUPERBATCHES=80 \
+BITFOX_TRAIN_OUTPUT=runs/gen16-sl768-ckpt \
+BITFOX_TRAIN_HL=768 \
+BITFOX_TRAIN_SEED=198273612 \
+BITFOX_TRAIN_SUPERBATCHES=60 \
 BITFOX_TRAIN_BATCHES_PER_SUPERBATCH=6000 \
 BITFOX_TRAIN_SAVE_RATE=10 \
-cargo run --release --bin train
+cargo run --release --locked --bin train
 ```
 
 ## Experiments
@@ -103,6 +112,7 @@ Use `experiment.py` to keep generated data, checkpoints, exported networks, and
 match logs under one run directory:
 
 ```sh
+python3 -m pip install -r tools/requirements.txt
 python3 trainer/experiment.py gen1 \
   --positions 2000000 \
   --nodes 10000 \
@@ -131,3 +141,7 @@ python3 trainer/experiment.py gen1-test \
   --games 400 \
   --match-nodes 20000
 ```
+
+The experiment match is a node-limited screen for ranking checkpoints. It does
+not test time management or LazySMP, so play a timed match against the current
+network before shipping a new one.
