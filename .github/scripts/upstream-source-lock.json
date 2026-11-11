@@ -1,0 +1,50 @@
+[
+  {
+    "component": "ffmpeg/6.8.3",
+    "source_commit": "b08d7969c550a804a59511c7b83f2dd8cc0499b8",
+    "source_tree": "980b98fcbb35169dc10d270de5c153201e1f32dc",
+    "source_url": "https://codeload.github.com/FFmpeg/FFmpeg/tar.gz/b08d7969c550a804a59511c7b83f2dd8cc0499b8",
+    "bytes": 15900622,
+    "sha256": "02fa6d9827da3b6786e4df821218cc036db2b4481e7f48267c2dcda695633afc"
+  },
+  {
+    "component": "qtbase/6.11.0",
+    "source_commit": "8ba7ea4b77a4b8f1948760221e264917ddc9e1c8",
+    "source_tree": "ea003888ec5cca8935b10851380f5cf992be0be2",
+    "source_url": "https://codeload.github.com/qt/qtbase/tar.gz/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8",
+    "bytes": 67499517,
+    "sha256": "299b289b61503a086120576c302633f8e0ac6de7d9ca7824686900d16aad34b1"
+  },
+  {
+    "component": "qtbase/6.8.3",
+    "source_commit": "c07c2d5a527a644d36e7853d55132ae38921682f",
+    "source_tree": "1a28ee71f7490a7b4c80841545438d740a5759c3",
+    "source_url": "https://codeload.github.com/qt/qtbase/tar.gz/c07c2d5a527a644d36e7853d55132ae38921682f",
+    "bytes": 63819895,
+    "sha256": "6460660324c1fbe608af6d1ab029321de4d713baf1eb143f2000ec41fb7e5483"
+  },
+  {
+    "component": "qtmultimedia/6.11.0",
+    "source_commit": "8ffcce57ebc4a557fb07727c60b8511e39c6b28b",
+    "source_tree": "4669a39129cc915c2212a788e012e5c1767a7be1",
+    "source_url": "https://codeload.github.com/qt/qtmultimedia/tar.gz/8ffcce57ebc4a557fb07727c60b8511e39c6b28b",
+    "bytes": 24230938,
+    "sha256": "1258c9632f63c640464720c275d4e919a3a7fd39885eda124b59b5eecc023027"
+  },
+  {
+    "component": "qtmultimedia/6.8.3",
+    "source_commit": "2bf1135261bf0c346c88005c2c4d53efc0d2edd9",
+    "source_tree": "1a6309de98b14156c7a85484bdf813df9d665bd2",
+    "source_url": "https://codeload.github.com/qt/qtmultimedia/tar.gz/2bf1135261bf0c346c88005c2c4d53efc0d2edd9",
+    "bytes": 23748257,
+    "sha256": "a7317f3fafefbfffc501534a7f805b12dd8d6dbf0f41eb0d91884231c93006a7"
+  },
+  {
+    "component": "qtsvg/6.8.3",
+    "source_commit": "c75099a75e81df35e7347a65e301bbf1011831a5",
+    "source_tree": "87f181537644aeaab46f899ca537bf6e43cb67e4",
+    "source_url": "https://codeload.github.com/qt/qtsvg/tar.gz/c75099a75e81df35e7347a65e301bbf1011831a5",
+    "bytes": 2247417,
+    "sha256": "01e0df64f914d6335a7def21d7ee5eb8dc1fb4c3831ef5904ce9965f9d99114d"
+  }
+]

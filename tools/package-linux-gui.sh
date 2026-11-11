@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 version="$(awk -F'"' '/^version = / {print $2; exit}' "${repo_root}/engine/Cargo.toml")"
 if [[ -z "$version" ]]; then
     echo "could not read package version from engine/Cargo.toml" >&2
@@ -15,7 +15,7 @@ fi
 
 board_src="${build_dir}/bitfox-board"
 core_src="${build_dir}/libbitfox.so"
-engine_src="${repo_root}/engine/target/release/bitfox"
+engine_src="${ENGINE_BIN:-${repo_root}/engine/target/release/bitfox}"
 
 for path in "$board_src" "$core_src" "$engine_src"; do
     if [[ ! -f "$path" ]]; then
@@ -24,7 +24,7 @@ for path in "$board_src" "$core_src" "$engine_src"; do
     fi
 done
 
-for tool in ldd patchelf sha256sum tar timeout; do
+for tool in gzip ldd patchelf sha256sum tar timeout python3 dpkg-query; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "missing required tool: $tool" >&2
         exit 1
@@ -55,12 +55,16 @@ archive="${dist_root}/bitfox-${version}-linux-x86_64-gui.tar.gz"
 
 rm -rf "$dist" "$archive" "${archive}.sha256"
 mkdir -p "$lib_dir" "$plugin_dir" "$engine_dir"
+dependency_origins="$(mktemp "${TMPDIR:-/tmp}/bitfox-dependencies.XXXXXX")"
+trap 'rm -f "$dependency_origins" "${smoke_log:-}"' EXIT HUP INT TERM
 
 board_bin="${dist}/bitfox-board-bin"
 wrapper="${dist}/bitfox-board"
 core_dst="${lib_dir}/libbitfox.so"
 engine_dst="${engine_dir}/Bitfox ${version}"
 
+cp "${repo_root}/LICENSE" "${dist}/LICENSE"
+cp "${repo_root}/licenses/rust-dependencies.txt" "${dist}/THIRD_PARTY_NOTICES.txt"
 cp "$board_src" "$board_bin"
 cp "$core_src" "$core_dst"
 cp "$engine_src" "$engine_dst"
@@ -105,6 +109,7 @@ copy_runtime_lib() {
         cp -L "$src" "$dst"
         chmod 644 "$dst" || true
         pending+=("$dst")
+        printf '%s\t%s\n' "$src" "${dst#${dist}/}" >> "$dependency_origins"
     fi
 }
 
@@ -120,17 +125,25 @@ collect_deps() {
 
 copy_plugin() {
     local src="$1"
-    [[ -f "$src" ]] || return 0
+    local required="${2:-optional}"
+    if [[ ! -f "$src" ]]; then
+        if [[ "$required" == "required" ]]; then
+            echo "missing required Qt plugin: $src" >&2
+            return 1
+        fi
+        return 0
+    fi
     local rel="${src#${qt_plugin_dir}/}"
     local dst="${plugin_dir}/${rel}"
     mkdir -p "$(dirname "$dst")"
     cp -L "$src" "$dst"
     chmod 755 "$dst" || true
     pending+=("$dst")
+    printf '%s\t%s\n' "$src" "${dst#${dist}/}" >> "$dependency_origins"
 }
 
 for plugin in platforms/libqxcb.so platforms/libqoffscreen.so; do
-    copy_plugin "${qt_plugin_dir}/${plugin}"
+    copy_plugin "${qt_plugin_dir}/${plugin}" required
 done
 
 for dir in imageformats iconengines multimedia styles tls; do
@@ -151,6 +164,9 @@ while IFS= read -r plugin; do
     patchelf --set-rpath '$ORIGIN/../../lib:$ORIGIN/..:$ORIGIN' "$plugin"
 done < <(find "$plugin_dir" -type f -name "*.so*")
 
+python3 "${repo_root}/tools/gui_dependency_notices.py" debian \
+    --bundle "$dist" --origins "$dependency_origins"
+
 if patchelf --print-needed "$board_bin" | grep -q "/libbitfox.so"; then
     patchelf --print-needed "$board_bin" >&2
     echo "bitfox-board still references an absolute libbitfox path" >&2
@@ -164,20 +180,27 @@ fi
 
 uci_out="$(printf "uci\nisready\nquit\n" | "$engine_dst")"
 echo "$uci_out"
+grep -Fxq "id name Bitfox ${version}" <<<"$uci_out"
 grep -q "^uciok$" <<<"$uci_out"
 grep -q "^readyok$" <<<"$uci_out"
 
+smoke_log="$(mktemp "${TMPDIR:-/tmp}/bitfox-gui-smoke.XXXXXX")"
 status=0
-QT_QPA_PLATFORM=offscreen timeout 5s "$wrapper" >/tmp/bitfox-gui-smoke.log 2>&1 || status=$?
-if [[ "$status" != 0 && "$status" != 124 ]]; then
-    cat /tmp/bitfox-gui-smoke.log >&2
-    exit "$status"
+QT_QPA_PLATFORM=offscreen \
+    timeout --signal=TERM --kill-after=5s 5s "$wrapper" \
+    >"$smoke_log" 2>&1 || status=$?
+if [[ "$status" -ne 124 ]]; then
+    cat "$smoke_log" >&2
+    echo "GUI exited before the smoke window (status $status)" >&2
+    exit 1
 fi
 
 mkdir -p "$dist_root"
+source_date_epoch="${SOURCE_DATE_EPOCH:-$(git -C "$repo_root" show -s --format=%ct HEAD)}"
 (
     cd "$dist_root"
-    tar --sort=name --owner=0 --group=0 --numeric-owner -czf "$(basename "$archive")" "Bitfox"
+    tar --sort=name --mtime="@${source_date_epoch}" --owner=0 --group=0 \
+        --numeric-owner -cf - "Bitfox" | gzip -n > "$(basename "$archive")"
 )
 sha256sum "$archive" | awk -v name="$(basename "$archive")" '{print $1 "  " name}' > "${archive}.sha256"
 echo "created ${archive}"

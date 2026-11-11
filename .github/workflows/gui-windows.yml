@@ -15,17 +15,17 @@ permissions:
 jobs:
   windows-gui:
     name: Windows GUI / x86_64
-    runs-on: windows-latest
+    runs-on: windows-2022
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Rust
-        run: rustup toolchain install stable --profile minimal
+        run: rustup toolchain install 1.96.0 --profile minimal
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
         with:
           version: "6.8.3"
           host: windows
@@ -37,8 +37,19 @@ jobs:
       - name: Build board
         shell: pwsh
         run: |
-          cmake -S gui-qt -B gui-qt/build-windows -DCMAKE_BUILD_TYPE=Release
+          $ErrorActionPreference = "Stop"
+          cmake -S gui-qt -B gui-qt/build-windows -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DBITFOX_STRICT_WARNINGS=ON
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake configure failed with exit code $LASTEXITCODE"
+          }
           cmake --build gui-qt/build-windows --config Release --parallel
+          if ($LASTEXITCODE -ne 0) {
+            throw "CMake build failed with exit code $LASTEXITCODE"
+          }
+          ctest --test-dir gui-qt/build-windows -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) {
+            throw "CTest failed with exit code $LASTEXITCODE"
+          }
 
       - name: Package board
         shell: pwsh
@@ -54,13 +65,35 @@ jobs:
           $dist = "$distRoot/Bitfox"
           New-Item -ItemType Directory -Force -Path "$dist/engines" | Out-Null
 
+          Copy-Item "LICENSE" "$dist/LICENSE"
+          Copy-Item "licenses/rust-dependencies.txt" "$dist/THIRD_PARTY_NOTICES.txt"
           Copy-Item "$buildDir/bitfox-board.exe" "$dist/"
           Copy-Item "$buildDir/bitfox.dll" "$dist/"
           Copy-Item "engine/target/release/bitfox.exe" "$dist/engines/Bitfox $version.exe"
 
-          windeployqt --release --compiler-runtime --no-translations "$dist/bitfox-board.exe"
+          windeployqt --release --no-compiler-runtime --no-translations --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler "$dist/bitfox-board.exe"
+          if ($LASTEXITCODE -ne 0) {
+            throw "windeployqt failed with exit code $LASTEXITCODE"
+          }
+
+          python tools/windows_runtime.py stage --bundle "$dist" --executable "bitfox-board.exe" --executable "engines/Bitfox $version.exe"
+          if ($LASTEXITCODE -ne 0) {
+            throw "App-local Windows runtime staging failed"
+          }
+
+          $qtVersion = & qmake -query QT_VERSION
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read deployed Qt version"
+          }
+          python tools/gui_dependency_notices.py official --bundle "$dist" --platform windows --qt-version "$qtVersion"
+          if ($LASTEXITCODE -ne 0) {
+            throw "GUI dependency notices could not be verified"
+          }
 
           $uci = "uci`nisready`nquit`n" | & "$dist/engines/Bitfox $version.exe"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Bundled engine exited with code $LASTEXITCODE"
+          }
           $uci | Write-Output
           if (($uci -join "`n") -notmatch "uciok" -or ($uci -join "`n") -notmatch "readyok") {
             throw "Bundled engine failed UCI smoke test"
@@ -74,21 +107,44 @@ jobs:
             if ($process.HasExited) {
               throw "Packaged board exited during smoke test"
             }
+            $process.Refresh()
+            if ($process.MainWindowHandle -eq 0 -or !$process.Responding) {
+              throw "Packaged board did not create a responding window"
+            }
           } finally {
             if (!$process.HasExited) {
               Stop-Process -Id $process.Id -Force
+              if (!$process.WaitForExit(10000)) {
+                throw "Packaged board did not stop after smoke test"
+              }
             }
           }
 
+          python tools/gui_dependency_notices.py verify --bundle "$dist"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Packaged GUI dependency manifest verification failed"
+          }
+
+          $sourceEpochText = & git show -s --format=%ct $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not read the release source timestamp"
+          }
+          $sourceEpoch = [int64]$sourceEpochText
+          $timestamp = [DateTimeOffset]::FromUnixTimeSeconds($sourceEpoch).UtcDateTime
+          Get-ChildItem -LiteralPath $dist -Recurse -Force | ForEach-Object {
+            $_.LastWriteTimeUtc = $timestamp
+          }
+          (Get-Item -LiteralPath $dist).LastWriteTimeUtc = $timestamp
           $zip = "$distRoot/bitfox-$version-windows-x86_64-gui.zip"
           Compress-Archive -Path "$dist" -DestinationPath $zip -Force
           $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
           "$hash  $(Split-Path $zip -Leaf)" | Set-Content "$zip.sha256" -NoNewline
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bitfox-windows-x86_64-gui
+          if-no-files-found: error
           path: |
             dist/bitfox-*-windows-x86_64-gui.zip
             dist/bitfox-*-windows-x86_64-gui.zip.sha256

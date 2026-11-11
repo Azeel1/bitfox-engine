@@ -1,0 +1,44 @@
+{
+  "ffmpeg/6.8.3": {
+    "path": "ffmpeg-7.1.txt",
+    "sha256": "ba57ea7caf7e9f4adeca1394426e92ddfbfc9981fdca1cb43833a61f03d6a610",
+    "source": "https://github.com/FFmpeg/FFmpeg/tree/b08d7969c550a804a59511c7b83f2dd8cc0499b8",
+    "version": "7.1"
+  },
+  "msvc/2022": {
+    "path": "msvc-2022.txt",
+    "sha256": "a1ceec72dbf16857359bf9c7dcc837e1d92443cf87779807f4a85697f37756d4",
+    "source": "https://visualstudio.microsoft.com/wp-content/uploads/2021/09/Visual-C-Runtime-2015-2022-License-1.docx",
+    "version": "2022"
+  },
+  "qtbase/6.11.0": {
+    "path": "qtbase-6.11.0.txt",
+    "sha256": "14c0f5d05186e23f8b5d940c011956dc9504bdb6ff4edfb7d90f24dfa9b5d9bb",
+    "source": "https://github.com/qt/qtbase/tree/8ba7ea4b77a4b8f1948760221e264917ddc9e1c8",
+    "version": "6.11.0"
+  },
+  "qtbase/6.8.3": {
+    "path": "qtbase-6.8.3.txt",
+    "sha256": "02fcf24601dbb03d2406f7af6d944f11c823611cc6f03a2999bad70cd05fbc81",
+    "source": "https://github.com/qt/qtbase/tree/c07c2d5a527a644d36e7853d55132ae38921682f",
+    "version": "6.8.3"
+  },
+  "qtmultimedia/6.11.0": {
+    "path": "qtmultimedia-6.11.0.txt",
+    "sha256": "439906d4264c3563423ece4eaee79539fb0720a98fa4cdca291cf0a675fa97e1",
+    "source": "https://github.com/qt/qtmultimedia/tree/8ffcce57ebc4a557fb07727c60b8511e39c6b28b",
+    "version": "6.11.0"
+  },
+  "qtmultimedia/6.8.3": {
+    "path": "qtmultimedia-6.8.3.txt",
+    "sha256": "ef7dd741baad7a79bf24dfec6cc511543d689b3b542c13a3dab47c1006f4f3cd",
+    "source": "https://github.com/qt/qtmultimedia/tree/2bf1135261bf0c346c88005c2c4d53efc0d2edd9",
+    "version": "6.8.3"
+  },
+  "qtsvg/6.8.3": {
+    "path": "qtsvg-6.8.3.txt",
+    "sha256": "7cf1e8652d4c2967db59f12cc390b3432838219243d14ebf8174d493ced33550",
+    "source": "https://github.com/qt/qtsvg/tree/c75099a75e81df35e7347a65e301bbf1011831a5",
+    "version": "6.8.3"
+  }
+}

@@ -1,3 +1,5 @@
+PYTHON ?= python3
+PROJECT := $(PYTHON) tools/bitfox.py
 ENGINE := engine
 BIN := $(ENGINE)/target/release/bitfox
 FEATURES :=
@@ -5,27 +7,41 @@ FEATFLAG := $(if $(FEATURES),--features $(FEATURES))
 WIN_TARGET := x86_64-pc-windows-gnu
 EXE :=
 
-.PHONY: release build test perft divide run windows version fmt clippy clean help
+.PHONY: release pgo build test check tools-test gui perft divide run windows version fmt clippy clean help
 
 release:
-	cd $(ENGINE) && cargo build --release $(FEATFLAG)
+	$(PROJECT) build $(FEATFLAG)
 	$(if $(EXE),cp $(BIN) $(EXE))
 
+pgo:
+	tools/pgo-build.sh "$(CPU)" $(ENGINE)/target/bitfox-pgo
+	$(if $(EXE),cp $(ENGINE)/target/bitfox-pgo $(EXE))
+
 windows:
-	cd $(ENGINE) && cargo build --release --target $(WIN_TARGET) $(FEATFLAG)
+	$(PROJECT) build --target $(WIN_TARGET) $(FEATFLAG)
 	@echo "built $(ENGINE)/target/$(WIN_TARGET)/release/bitfox.exe"
 
 version:
-	@cd $(ENGINE) && cargo pkgid | sed 's/.*[#@]//'
+	@$(PROJECT) version
 
 build:
-	cd $(ENGINE) && cargo build $(FEATFLAG)
+	$(PROJECT) build --profile dev $(FEATFLAG)
 
 test:
-	cd $(ENGINE) && cargo test --release $(FEATFLAG)
+	$(PROJECT) test $(FEATFLAG)
 
-perft: release
-	$(BIN) perft 6
+check:
+	$(PROJECT) check
+
+tools-test:
+	$(PYTHON) -B -m unittest discover -s tools -p 'test_*.py'
+
+gui:
+	$(PROJECT) gui configure
+	$(PROJECT) gui build
+
+perft:
+	$(PROJECT) perft 6
 
 divide: release
 	$(BIN) divide 1
@@ -37,16 +53,21 @@ fmt:
 	cd $(ENGINE) && cargo fmt
 
 clippy:
-	cd $(ENGINE) && cargo clippy --release $(FEATFLAG) -- -D warnings
+	cd $(ENGINE) && cargo clippy --release --locked $(FEATFLAG) -- -D warnings
 
 clean:
 	cd $(ENGINE) && cargo clean
-	rm -rf gui-qt/build build
+	rm -rf gui-qt/build gui-qt/build-arm64 gui-qt/build-strict \
+		gui-qt/build-linux gui-qt/build-macos gui-qt/build-windows build
 
 help:
 	@echo "release  build the optimized engine binary and cdylib"
+	@echo "pgo      profile-guided release build (CPU=x86-64-v3 for AVX2)"
 	@echo "build    debug build"
 	@echo "test     run the perft + correctness suite"
+	@echo "check    verify shared version, network, ABI and training dependency contracts"
+	@echo "tools-test  run the Python tool tests"
+	@echo "gui      configure and build the Qt application in build/gui"
 	@echo "perft    perft(6) from startpos"
 	@echo "divide   perft divide at the root"
 	@echo "run      start the engine in UCI mode"

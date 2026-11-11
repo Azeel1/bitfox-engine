@@ -16,34 +16,51 @@ jobs:
   macos-gui:
     name: macOS GUI / arm64
     runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Rust
-        run: rustup toolchain install stable --profile minimal
+        run: rustup toolchain install 1.96.0 --profile minimal
+
+      - name: Install Ninja
+        run: brew install ninja
 
       - name: Install Qt
-        run: |
-          brew install qt ninja
-          qt_prefix="$(brew --prefix qt)"
-          echo "${qt_prefix}/bin" >> "$GITHUB_PATH"
-          echo "CMAKE_PREFIX_PATH=${qt_prefix}" >> "$GITHUB_ENV"
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730
+        with:
+          version: "6.11.0"
+          host: mac
+          target: desktop
+          arch: clang_64
+          modules: qtmultimedia
+          cache: true
 
       - name: Build board
         run: |
           test "$(uname -m)" = "arm64"
-          cmake -S gui-qt -B gui-qt/build-macos -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S gui-qt -B gui-qt/build-macos -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOSX_DEPLOYMENT_TARGET" \
+            -DBUILD_TESTING=ON \
+            -DBITFOX_STRICT_WARNINGS=ON
           cmake --build gui-qt/build-macos --parallel
+          ctest --test-dir gui-qt/build-macos --output-on-failure
 
       - name: Package board
         run: tools/package-macos-gui.sh
 
+      - name: Smoke packaged board
+        run: python3 tools/smoke_gui.py dist/Bitfox.app/Contents/MacOS/bitfox-board --platform cocoa --plugin-dir dist/Bitfox.app/Contents/PlugIns
+
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bitfox-macos-arm64-gui
+          if-no-files-found: error
           path: |
             dist/bitfox-*-macos-arm64-gui.zip
             dist/bitfox-*-macos-arm64-gui.zip.sha256

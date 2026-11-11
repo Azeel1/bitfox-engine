@@ -19,10 +19,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Install Rust
-        run: rustup toolchain install stable --profile minimal
+        run: rustup toolchain install 1.96.0 --profile minimal
 
       - name: Install dependencies
         run: |
@@ -53,16 +53,21 @@ jobs:
 
       - name: Build board
         run: |
-          cmake -S gui-qt -B gui-qt/build-linux -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S gui-qt -B gui-qt/build-linux -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=ON \
+            -DBITFOX_STRICT_WARNINGS=ON
           cmake --build gui-qt/build-linux --parallel 2
+          ctest --test-dir gui-qt/build-linux --output-on-failure
 
       - name: Package board
         run: tools/package-linux-gui.sh
 
       - name: Upload package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: bitfox-linux-x86_64-gui
+          if-no-files-found: error
           path: |
             dist/bitfox-*-linux-x86_64-gui.tar.gz
             dist/bitfox-*-linux-x86_64-gui.tar.gz.sha256

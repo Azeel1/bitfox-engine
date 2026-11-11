@@ -1,0 +1,100 @@
+name: Prepare corresponding source inputs
+
+on:
+  workflow_dispatch:
+    inputs:
+      binary_review_run_id:
+        description: Successful binary review run of this commit
+        type: string
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  prepare:
+    if: github.repository == 'Azeel1/bitfox-engine'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      PYTHONPATH: tools
+      PYTHONDONTWRITEBYTECODE: "1"
+      RUSTUP_TOOLCHAIN: "1.96.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Install Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.11.9"
+
+      - name: Verify binary review run
+        id: review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVIEW_RUN_ID: ${{ inputs.binary_review_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! [[ "$REVIEW_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            printf '%s\n' 'A numeric binary review run ID is required.' >&2
+            exit 1
+          fi
+          source_commit="$(git rev-parse HEAD)"
+          metadata="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${REVIEW_RUN_ID}" \
+            --jq '.head_sha + " " + .status + " " + (.conclusion // "") + " " + .event')"
+          if [[ "$metadata" != "$source_commit completed success workflow_dispatch" ]]; then
+            printf '%s\n' 'Binary review must have completed successfully at this commit.' >&2
+            exit 1
+          fi
+          version="$(python -c 'import tomllib; print(tomllib.load(open("engine/Cargo.toml", "rb"))["package"]["version"])')"
+          python tools/release_metadata.py "$version"
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'commit=%s\n' "$source_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Download reviewed binary packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: bitfox-review-${{ steps.review.outputs.version }}
+          path: reviewed-packages
+          run-id: ${{ inputs.binary_review_run_id }}
+          github-token: ${{ github.token }}
+
+      - name: Load signed Ubuntu source indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu jammy main universe restricted multiverse' \
+            'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu jammy-updates main universe restricted multiverse' \
+            'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu jammy-security main universe restricted multiverse' \
+            | sudo tee /etc/apt/sources.list.d/bitfox-reviewed-sources.list >/dev/null
+          sudo apt-get update \
+            -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/bitfox-reviewed-sources.list \
+            -o Dir::Etc::sourceparts=- -o Acquire::Retries=3
+
+      - name: Install Rust tools
+        run: rustup toolchain install 1.96.0 --profile minimal
+
+      - name: Prepare and verify source material
+        env:
+          VERSION: ${{ steps.review.outputs.version }}
+          SOURCE_COMMIT: ${{ steps.review.outputs.commit }}
+        run: |
+          python -B .github/scripts/prepare-source-inputs.py --packages reviewed-packages \
+            --version "$VERSION" --artifact-commit "$SOURCE_COMMIT" --output source-inputs
+
+      - name: Upload corresponding source inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: bitfox-source-inputs-${{ steps.review.outputs.commit }}
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+          path: |
+            source-inputs/plan.json
+            source-inputs/payload/
