@@ -17,6 +17,16 @@ fn move_info(board: &Board, m: Move) -> (Piece, Option<(Piece, usize)>) {
     (moved, captured)
 }
 
+fn find(board: &mut Board, uci: &str) -> Move {
+    board
+        .generate_legal()
+        .as_slice()
+        .iter()
+        .copied()
+        .find(|mv| mv.to_uci() == uci)
+        .unwrap_or_else(|| panic!("move {uci} not legal at {}", board.to_fen()))
+}
+
 fn walk(board: &mut Board, nnue: &mut Nnue, depth: u32) {
     assert_eq!(
         nnue.eval(board),
@@ -53,5 +63,44 @@ fn incremental_matches_full_refresh() {
         let mut nnue = Nnue::default();
         nnue.refresh(&board);
         walk(&mut board, &mut nnue, 3);
+    }
+}
+
+#[test]
+fn deferred_updates_cover_special_moves_and_unmake() {
+    for (fen, moves) in [
+        (
+            Board::START_FEN,
+            &["e2e4", "a7a6", "e4e5", "d7d5", "e5d6"][..],
+        ),
+        (
+            Board::START_FEN,
+            &[
+                "e2e4", "e7e5", "g1f3", "b8c6", "f1b5", "a7a6", "b5a4", "g8f6", "e1g1",
+            ][..],
+        ),
+        ("1r2k3/P7/8/8/8/8/8/4K3 w - - 0 1", &["a7b8q"][..]),
+    ] {
+        let mut board = Board::from_fen(fen).unwrap();
+        let root = board.to_fen();
+        let mut nnue = Nnue::default();
+        nnue.refresh(&board);
+        let mut played = Vec::new();
+
+        for uci in moves {
+            let mv = find(&mut board, uci);
+            let (moved, captured) = move_info(&board, mv);
+            board.make_move(mv);
+            nnue.make(&board, mv, moved, captured);
+            played.push(mv);
+        }
+        assert_eq!(nnue.eval(&board), evaluate(&board));
+
+        while let Some(mv) = played.pop() {
+            board.unmake_move(mv);
+            nnue.unmake();
+            assert_eq!(nnue.eval(&board), evaluate(&board));
+        }
+        assert_eq!(board.to_fen(), root);
     }
 }
