@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "file": "bitfox.nnue",
+  "name": "gen18-sl768-cp60",
+  "sha256": "72217f29273291897f21b61159b9922115f3461b3bc2f13a3163cfbfd99e4d05",
+  "bytes": 11822656,
+  "contract_sha256": "43addada89346c6c75a5aab6c2d821d8231686c60cbc87ad66961c46b85f6ff1",
+  "architecture": {
+    "hidden_size": 768,
+    "input_buckets": 10,
+    "output_buckets": 8,
+    "piece_features": 768,
+    "features": 7680,
+    "qa": 255,
+    "qb": 64,
+    "scale": 400
+  },
+  "training": {
+    "source": "Bitfox self-play",
+    "records": 914618673,
+    "superbatches": 60,
+    "batches_per_superbatch": 6000,
+    "batch_size": 16384,
+    "checkpoint": 60
+  },
+  "format": "Little-endian int16 parameters, padded to 64 bytes; factorizer merged at export"
+}
