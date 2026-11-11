@@ -1,0 +1,9 @@
+name: Set up a separate Rustup directory
+description: Keep Rust toolchain installations separate across jobs and attempts.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        JOB_RUSTUP_HOME: ${{ runner.temp }}/bitfox-rustup-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      run: printf 'RUSTUP_HOME=%s\n' "$JOB_RUSTUP_HOME" >> "$GITHUB_ENV"
