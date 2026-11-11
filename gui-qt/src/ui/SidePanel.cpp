@@ -8,6 +8,7 @@
 #include <QListWidget>
 #include <QLocale>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QVBoxLayout>
 
@@ -21,6 +22,7 @@ static QPushButton *iconButton(const QString &icon, const QString &tip, QWidget 
     b->setIconSize(QSize(22, 22));
     b->setFixedSize(40, 38);
     b->setToolTip(tip);
+    b->setAccessibleName(tip);
     b->setCursor(Qt::PointingHandCursor);
     return b;
 }
@@ -65,7 +67,7 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent) {
     m_black = new QComboBox(players);
     form->addRow(tr("White"), m_white);
     form->addRow(tr("Black"), m_black);
-    m_versions = new QPushButton(tr("Get more versions..."), players);
+    m_versions = new QPushButton(tr("Get engine versions..."), players);
     m_versions->setCursor(Qt::PointingHandCursor);
     form->addRow(m_versions);
     m_time = new QSpinBox(players);
@@ -107,18 +109,47 @@ SidePanel::SidePanel(QWidget *parent) : QWidget(parent) {
 }
 
 void SidePanel::setEngines(const QVector<EngineEntry> &engines) {
-    for (QComboBox *combo : {m_white, m_black}) {
+    const bool firstLoad = m_black->count() == 0;
+    const QString oldWhite = m_white->currentData().toString();
+    const QString oldBlack = m_black->currentData().toString();
+
+    auto refill = [&engines](QComboBox *combo, const QString &selected) {
         combo->blockSignals(true);
         combo->clear();
         combo->addItem(tr("Human"), QString());
         for (const EngineEntry &e : engines) {
             combo->addItem(e.name, e.path);
         }
+        const int index = combo->findData(selected);
+        combo->setCurrentIndex(index >= 0 ? index : 0);
         combo->blockSignals(false);
-    }
-    if (!engines.isEmpty()) {
+    };
+
+    refill(m_white, oldWhite);
+    refill(m_black, oldBlack);
+    if (firstLoad && !engines.isEmpty()) {
+        const QSignalBlocker blocker(m_black);
         m_black->setCurrentIndex(1);
     }
+
+    const QString newWhite = m_white->currentData().toString();
+    const QString newBlack = m_black->currentData().toString();
+    if (newWhite != oldWhite) {
+        emit engineSelected(0, newWhite);
+    }
+    if (newBlack != oldBlack) {
+        emit engineSelected(1, newBlack);
+    }
+}
+
+void SidePanel::setEngineSelection(int color, const QString &path) {
+    if (color < 0 || color > 1) {
+        return;
+    }
+    QComboBox *combo = color == 0 ? m_white : m_black;
+    const int index = combo->findData(path);
+    const QSignalBlocker blocker(combo);
+    combo->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 void SidePanel::rebuildMoves(const QStringList &moves) {

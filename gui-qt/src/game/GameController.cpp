@@ -1,6 +1,7 @@
 #include "game/GameController.h"
 
 #include <QDate>
+#include <algorithm>
 
 #include "engine/UciEngine.h"
 
@@ -91,9 +92,16 @@ bool canProjectPremove(const int pieces[64], int from, int to) {
     }
 }
 
-void applyProjectedPremove(int pieces[64], int from, int to, int promo) {
+void applyProjectedPremove(int pieces[64], int from, int to, int promo, int ep) {
     int piece = pieces[from];
     int color = pieceColor(piece);
+    if (piece % 6 == 0 && to == ep && pieces[to] < 0 &&
+        qAbs((from & 7) - (to & 7)) == 1) {
+        int captured = (from & ~7) | (to & 7);
+        if (pieces[captured] == (1 - color) * 6) {
+            pieces[captured] = -1;
+        }
+    }
     pieces[from] = -1;
     if (piece % 6 == 5 && qAbs((from & 7) - (to & 7)) == 2) {
         int base = color == 0 ? 0 : 56;
@@ -192,12 +200,20 @@ QString fenFromPieces(const int pieces[64], const QStringList &baseParts, const 
 
 GameController::GameController(QObject *parent) : QObject(parent) {
     m_board.reset();
+    m_fens = {m_board.fen()};
     m_pmBoard.setFen(m_board.fen());
 }
 
 void GameController::setEngine(int color, UciEngine *engine) {
+    if (color < 0 || color > 1 || m_engines[color] == engine) {
+        return;
+    }
     if (m_engines[color]) {
         disconnect(m_engines[color], nullptr, this, nullptr);
+    }
+    if (m_engineSearchIds[color] != 0) {
+        m_engineSearchIds[color] = 0;
+        m_awaiting = false;
     }
     m_engines[color] = engine;
     if (engine) {
@@ -219,11 +235,17 @@ void GameController::stopEngines() {
 
 void GameController::newGame() {
     stopEngines();
+    for (UciEngine *e : m_engines) {
+        if (e) {
+            e->newGame();
+        }
+    }
     m_board.reset();
     m_over = false;
     m_fens = {m_board.fen()};
     m_moves.clear();
     m_san.clear();
+    m_captured.clear();
     m_moveSquares.clear();
     m_ply = 0;
     emit historyRebuilt(QStringList(), -1, -1);
@@ -324,11 +346,12 @@ QString GameController::pgn(const QString &white, const QString &black,
     out += "[Event \"Bitfox\"]\n";
     out += "[Site \"?\"]\n";
     out += QString("[Date \"%1\"]\n").arg(QDate::currentDate().toString("yyyy.MM.dd"));
+    out += "[Round \"?\"]\n";
     out += QString("[White \"%1\"]\n").arg(esc(white));
     out += QString("[Black \"%1\"]\n").arg(esc(black));
     out += QString("[Result \"%1\"]\n\n").arg(result);
     QString body;
-    for (int i = 0; i < m_moves.size(); ++i) {
+    for (int i = 0; i < m_ply; ++i) {
         if (i % 2 == 0) {
             body += QString("%1. ").arg(i / 2 + 1);
         }
@@ -337,6 +360,18 @@ QString GameController::pgn(const QString &white, const QString &black,
     body += result;
     out += body + "\n";
     return out;
+}
+
+QVector<int> GameController::capturedBy(int color) const {
+    QVector<int> captured;
+    for (int i = 0; i < m_ply; ++i) {
+        int piece = m_captured[i];
+        if (piece >= 0 && pieceColor(piece) != color) {
+            captured.append(piece);
+        }
+    }
+    std::sort(captured.begin(), captured.end());
+    return captured;
 }
 
 void GameController::nudge() {
@@ -357,13 +392,18 @@ void GameController::syncPremoveBoard() {
     }
 
     QList<Premove> synced;
+    int ep = baseParts.size() > 3 ? CoreBoard::squareFromName(baseParts[3]) : -1;
     for (const Premove &pm : m_premoves) {
         if (!canProjectPremove(pieces, pm.from, pm.to)) {
             break;
         }
         updateProjectedCastling(castling, pm.from, pm.to);
         synced.append(pm);
-        applyProjectedPremove(pieces, pm.from, pm.to, pm.promo);
+        applyProjectedPremove(pieces, pm.from, pm.to, pm.promo, ep);
+        ep = -1;
+        if (baseParts.size() > 3) {
+            baseParts[3] = QStringLiteral("-");
+        }
     }
 
     if (synced.size() != m_premoves.size()) {
@@ -415,8 +455,11 @@ void GameController::undo() {
     }
     m_ply = target;
     m_over = false;
-    m_board.setFen(m_fens[m_ply]);
+    restoreBoard();
     rebuildAfterHistoryChange();
+    if (hasHuman) {
+        continueGame();
+    }
 }
 
 void GameController::redo() {
@@ -426,7 +469,7 @@ void GameController::redo() {
     stopEngines();
     ++m_ply;
     m_over = false;
-    m_board.setFen(m_fens[m_ply]);
+    restoreBoard();
     emit historyRebuilt(m_san.mid(0, m_ply), m_moveSquares[m_ply - 1].first,
                         m_moveSquares[m_ply - 1].second);
     emit boardChanged();
@@ -438,6 +481,18 @@ void GameController::redo() {
     } else {
         int side = m_board.sideToMove();
         emit statusText(side == 0 ? tr("White to move") : tr("Black to move"));
+    }
+}
+
+void GameController::restoreBoard() {
+    m_board.setFen(m_fens.first());
+    for (int i = 0; i < m_ply; ++i) {
+        const QString &move = m_moves[i];
+        const int promo = move.size() == 5
+                              ? QStringLiteral("nbrq").indexOf(move[4]) + 1
+                              : 0;
+        CcMoveInfo info{};
+        m_board.apply(m_moveSquares[i].first, m_moveSquares[i].second, promo, &info);
     }
 }
 
@@ -475,11 +530,13 @@ void GameController::onEngineBestMove(int searchId, int from, int to, int promo)
         return;
     }
     emit sound(QStringLiteral("illegal"));
-    emit statusText(tr("%1 returned an illegal move").arg(m_engines[side]->name()));
+    m_engines[side]->rejectMove();
 }
 
 bool GameController::applyMove(int from, int to, int promo, bool engine) {
     CcMoveInfo info;
+    int captured = m_board.pieceAt(to);
+    int side = m_board.sideToMove();
     QString uci = moveToUci(from, to, promo);
     if (!m_board.apply(from, to, promo, &info) || !info.legal) {
         return false;
@@ -488,10 +545,12 @@ bool GameController::applyMove(int from, int to, int promo, bool engine) {
     if (m_ply < m_moves.size()) {
         m_moves = m_moves.mid(0, m_ply);
         m_san = m_san.mid(0, m_ply);
+        m_captured = m_captured.mid(0, m_ply);
         m_fens = m_fens.mid(0, m_ply + 1);
         m_moveSquares = m_moveSquares.mid(0, m_ply);
     }
     m_moves.append(uci);
+    m_captured.append(info.ep ? (1 - side) * 6 : captured);
     m_fens.append(m_board.fen());
     m_moveSquares.append({from, to});
     ++m_ply;
@@ -503,11 +562,17 @@ bool GameController::applyMove(int from, int to, int promo, bool engine) {
     }
 
     QString snd = "move";
-    if (info.status == 1 || info.status >= 2) snd = "end";
-    else if (info.check) snd = "check";
-    else if (info.castle) snd = "castle";
-    else if (info.promo) snd = "promote";
-    else if (info.capture || info.ep) snd = "capture";
+    if (info.status >= 1) {
+        snd = "end";
+    } else if (info.check) {
+        snd = "check";
+    } else if (info.castle) {
+        snd = "castle";
+    } else if (info.promo) {
+        snd = "promote";
+    } else if (info.capture || info.ep) {
+        snd = "capture";
+    }
     emit sound(snd);
 
     emit movePlayed(from, to, uci, engine);
@@ -543,6 +608,9 @@ bool GameController::checkGameOver() {
 }
 
 void GameController::continueGame() {
+    if (m_over || m_awaiting) {
+        return;
+    }
     int side = m_board.sideToMove();
     if (isHuman(side)) {
         if (!m_premoves.isEmpty()) {
@@ -570,9 +638,14 @@ void GameController::continueGame() {
         return;
     }
     emit statusText(tr("%1 is thinking...").arg(m_engines[side]->name()));
-    int searchId = m_engines[side]->play(m_board.fen(), m_movetimeMs);
+    QPointer<UciEngine> engine = m_engines[side];
+    int searchId = engine->play(m_fens.first(), m_movetimeMs,
+                                m_moves.mid(0, m_ply));
+    if (!engine || m_engines[side] != engine.data()) {
+        return;
+    }
     if (searchId == 0) {
-        emit statusText(tr("%1 is starting...").arg(m_engines[side]->name()));
+        emit statusText(tr("%1 is starting...").arg(engine->name()));
         return;
     }
     m_engineSearchIds[side] = searchId;

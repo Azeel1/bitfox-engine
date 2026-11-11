@@ -29,6 +29,7 @@ public:
     void undo();
     void redo();
     QString pgn(const QString &white, const QString &black, const QString &result) const;
+    QVector<int> capturedBy(int color) const;
 
 public slots:
     void requestHumanMove(int from, int to, int promo);
@@ -60,6 +61,7 @@ private:
     QString moveToUci(int from, int to, int promo) const;
     QString sanForMove(int index) const;
     void rebuildAfterHistoryChange();
+    void restoreBoard();
     void stopEngines();
     void emitPremoves();
     void syncPremoveBoard();
@@ -76,6 +78,7 @@ private:
     QStringList m_fens;
     QStringList m_moves;
     QStringList m_san;
+    QList<int> m_captured;
     QList<QPair<int, int>> m_moveSquares;
     int m_ply = 0;
 };

@@ -68,11 +68,11 @@ void BoardView::animateMove(int from, int to) {
         m_skipNextAnim = false;
         return;
     }
-    if (from < 0 || to < 0 || !m_board) {
+    if (from < 0 || from >= 64 || to < 0 || to >= 64 || !m_board) {
         return;
     }
     int piece = renderBoard()->pieceAt(to);
-    if (piece < 0) {
+    if (piece < 0 || piece >= 12) {
         return;
     }
     m_animFrom = from;
@@ -291,7 +291,7 @@ void BoardView::paintEvent(QPaintEvent *) {
     }
 
     qreal m = cell * 0.06;
-    bool animating = m_animPiece >= 0;
+    bool animating = m_animPiece >= 0 && m_animPiece < 12;
     const QPixmap *pieceSet = cell > 80.0 ? m_piecesHi : m_pieces;
     for (int sq = 0; sq < 64; ++sq) {
         if (m_dragging && sq == m_dragFrom) {
@@ -301,7 +301,7 @@ void BoardView::paintEvent(QPaintEvent *) {
             continue;
         }
         int piece = rb->pieceAt(sq);
-        if (piece < 0) {
+        if (piece < 0 || piece >= 12) {
             continue;
         }
         QRectF r = squareRect(sq);
@@ -326,7 +326,7 @@ void BoardView::paintEvent(QPaintEvent *) {
 
     if (m_dragging && m_dragFrom >= 0) {
         int piece = rb->pieceAt(m_dragFrom);
-        if (piece >= 0) {
+        if (piece >= 0 && piece < 12) {
             QRectF ghost = squareRect(m_dragFrom);
             p.setOpacity(0.25);
             p.drawPixmap(ghost.adjusted(m, m, -m, -m).toRect(), pieceSet[piece]);
@@ -350,10 +350,11 @@ int BoardView::promotionChoice(int to) {
     QAction *n = menu.addAction(tr("Knight"));
     QAction *picked = menu.exec(mapToGlobal(squareRect(to).center().toPoint()));
     if (!picked) return -1;
+    if (picked == q) return 4;
     if (picked == r) return 3;
     if (picked == b) return 2;
     if (picked == n) return 1;
-    return 4;
+    return -1;
 }
 
 void BoardView::selectSquare(int sq, bool premove) {
@@ -372,6 +373,7 @@ void BoardView::commitSelection(int to) {
     if (isPawn && (toRank == 7 || toRank == 0)) {
         promo = promotionChoice(to);
         if (promo < 0) {
+            m_skipNextAnim = false;
             clearSelection();
             return;
         }

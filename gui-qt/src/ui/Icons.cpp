@@ -35,7 +35,7 @@ void drawUndo(QPainter &p, int s, bool redo) {
     double tipAngle = redo ? 30 : 150;
     double a = qDegreesToRadians(tipAngle);
     QPointF tip(c.x() + r * qCos(a), c.y() - r * qSin(a));
-    arrowhead(p, tip + QPointF(0, redo ? -s * 0.02 : -s * 0.02),
+    arrowhead(p, tip + QPointF(0, -s * 0.02),
               redo ? 250 : 290, s * 0.2);
 }
 

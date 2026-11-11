@@ -47,6 +47,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
 
 private:
+    friend class MainWindowTest;
+
     int squareAt(const QPointF &pos) const;
     QRectF squareRect(int square) const;
     qreal cellSize() const;

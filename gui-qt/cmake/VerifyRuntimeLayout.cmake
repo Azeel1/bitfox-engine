@@ -1,0 +1,18 @@
+if(NOT DEFINED BITFOX_BOARD OR NOT EXISTS "${BITFOX_BOARD}")
+    message(FATAL_ERROR "Bitfox board executable is missing: ${BITFOX_BOARD}")
+endif()
+if(NOT DEFINED BITFOX_CORE OR NOT EXISTS "${BITFOX_CORE}")
+    message(FATAL_ERROR "Bitfox engine core is missing: ${BITFOX_CORE}")
+endif()
+
+file(SIZE "${BITFOX_BOARD}" BITFOX_BOARD_SIZE)
+file(SIZE "${BITFOX_CORE}" BITFOX_CORE_SIZE)
+if(BITFOX_BOARD_SIZE EQUAL 0 OR BITFOX_CORE_SIZE EQUAL 0)
+    message(FATAL_ERROR "Bitfox runtime artifacts must not be empty")
+endif()
+
+cmake_path(GET BITFOX_BOARD PARENT_PATH BITFOX_BOARD_DIR)
+cmake_path(GET BITFOX_CORE PARENT_PATH BITFOX_CORE_DIR)
+if(NOT BITFOX_BOARD_DIR STREQUAL BITFOX_CORE_DIR)
+    message(FATAL_ERROR "Bitfox board and engine core must be installed together")
+endif()

@@ -10,6 +10,8 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
+#include <QThread>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QVector>
 #include <QWidget>
@@ -22,6 +24,8 @@
 #include "engine/UciEngine.h"
 #include "game/GameController.h"
 #include "ui/ReleasesDialog.h"
+#include "ui/AppUpdateDialog.h"
+#include "update/AppUpdater.h"
 #include "ui/SidePanel.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
@@ -30,6 +34,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
 
     m_game = new GameController(this);
     m_sound = new SoundBank(this);
+    m_appUpdater = new AppUpdater(this);
+    connect(m_appUpdater, &AppUpdater::stateChanged, this, [this] {
+        if (m_appUpdater->state() == AppUpdater::Available && !m_updateDialog)
+            openAppUpdates();
+    });
     m_boardView = new BoardView(this);
     m_panel = new SidePanel(this);
 
@@ -78,6 +87,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     onNewGame();
     m_boardView->setFocus();
     checkForUpdates();
+    QTimer::singleShot(1000, this, [this] {
+        if (QSettings().value("appUpdates/automatic", true).toBool())
+            m_appUpdater->check(false);
+    });
 }
 
 void MainWindow::loadSettings() {
@@ -142,14 +155,46 @@ void MainWindow::keyPressEvent(QKeyEvent *event) {
     event->accept();
 }
 
-void MainWindow::showHint() {
-    int from = -1, to = -1, promo = 0;
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    bool ok = m_game->board()->bestMove(500, from, to, promo);
-    QApplication::restoreOverrideCursor();
-    if (ok) {
-        m_boardView->setHint(from, to);
+MainWindow::~MainWindow() {
+    if (m_hintThread) {
+        m_hintThread->wait();
+        delete m_hintThread;
+        m_hintThread = nullptr;
+        QApplication::restoreOverrideCursor();
     }
+}
+
+void MainWindow::showHint() {
+    if (m_hintThread) {
+        m_hintRequested = true;
+        return;
+    }
+    const QString fen = m_game->board()->fen();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    m_hintThread = QThread::create([this, fen]() {
+        CoreBoard board;
+        int from = -1, to = -1, promo = 0;
+        const bool ok = board.setFen(fen) && board.bestMove(500, from, to, promo);
+        QMetaObject::invokeMethod(
+            this,
+            [this, fen, ok, from, to]() {
+                if (ok && m_game->board()->fen() == fen) {
+                    m_boardView->setHint(from, to);
+                }
+            },
+            Qt::QueuedConnection);
+    });
+    connect(m_hintThread, &QThread::finished, this, [this]() {
+        QApplication::restoreOverrideCursor();
+        m_hintThread->deleteLater();
+        m_hintThread = nullptr;
+        if (m_hintRequested) {
+            m_hintRequested = false;
+            showHint();
+        }
+    });
+    m_hintThread->setStackSize(8 * 1024 * 1024);
+    m_hintThread->start();
 }
 
 void MainWindow::onEngineSelected(int color, const QString &path) {
@@ -160,12 +205,27 @@ void MainWindow::onEngineSelected(int color, const QString &path) {
     }
     if (!path.isEmpty()) {
         auto *engine = new UciEngine(this);
+        connect(engine, &UciEngine::ready, m_game, &GameController::nudge);
+        connect(engine, &UciEngine::failed, this,
+                [this, color, engine](const QString &error) {
+                    if (m_engines[color] != engine) {
+                        return;
+                    }
+                    m_game->setEngine(color, nullptr);
+                    m_engines[color] = nullptr;
+                    m_panel->setEngineSelection(color, QString());
+                    engine->deleteLater();
+                    updateHumanColors();
+                    m_game->nudge();
+                    m_panel->setStatus(tr("Engine stopped: %1").arg(error));
+                });
         if (engine->start(path)) {
             m_engines[color] = engine;
             m_game->setEngine(color, engine);
-            connect(engine, &UciEngine::ready, m_game, &GameController::nudge);
         } else {
             engine->deleteLater();
+            m_panel->setEngineSelection(color, QString());
+            m_panel->setStatus(tr("Could not start the selected engine"));
         }
     }
     updateHumanColors();
@@ -236,6 +296,16 @@ void MainWindow::openSettings() {
     auto *autoUpdate = new QCheckBox(tr("Automatically download the newest engine version"), &dlg);
     autoUpdate->setChecked(m_autoUpdate);
     lay->addWidget(autoUpdate);
+    auto *appAutomatic = new QCheckBox(tr("Check for application updates daily"), &dlg);
+    appAutomatic->setChecked(QSettings().value("appUpdates/automatic", true).toBool());
+    lay->addWidget(appAutomatic);
+    auto *appCheck = new QPushButton(tr("Check for application updates..."), &dlg);
+    lay->addWidget(appCheck);
+    connect(appCheck, &QPushButton::clicked, this, [this, &dlg] {
+        dlg.accept();
+        openAppUpdates();
+        m_appUpdater->check(true);
+    });
     auto *done = new QPushButton(tr("Done"), &dlg);
     done->setObjectName("primary");
     lay->addWidget(done);
@@ -256,6 +326,7 @@ void MainWindow::openSettings() {
     settings.setValue("soundOn", m_soundOn);
     settings.setValue("premoveOn", m_premoveOn);
     settings.setValue("autoUpdate", m_autoUpdate);
+    settings.setValue("appUpdates/automatic", appAutomatic->isChecked());
 }
 
 void MainWindow::openVersions() {
@@ -263,6 +334,17 @@ void MainWindow::openVersions() {
     connect(&dlg, &ReleasesDialog::enginesChanged, this,
             [this] { m_panel->setEngines(EngineCatalog::discover()); });
     dlg.exec();
+}
+
+void MainWindow::openAppUpdates() {
+    if (!m_updateDialog) {
+        m_updateDialog = new AppUpdateDialog(m_appUpdater, this);
+        m_updateDialog->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_updateDialog, &QObject::destroyed, this, [this] { m_updateDialog = nullptr; });
+    }
+    m_updateDialog->show();
+    m_updateDialog->raise();
+    m_updateDialog->activateWindow();
 }
 
 void MainWindow::updateCaptured() {
@@ -274,30 +356,15 @@ void MainWindow::updateCaptured() {
             (p < 6 ? wc[p % 6] : bc[p % 6])++;
         }
     }
-    const int init[6] = {8, 2, 2, 2, 1, 1};
     const int val[6] = {1, 3, 3, 5, 9, 0};
 
     int whiteMat = 0, blackMat = 0;
-    int promoW = 0, promoB = 0;
-    for (int pt = 1; pt < 5; ++pt) {
-        promoW += qMax(0, wc[pt] - init[pt]);
-        promoB += qMax(0, bc[pt] - init[pt]);
-    }
     for (int pt = 0; pt < 5; ++pt) {
         whiteMat += wc[pt] * val[pt];
         blackMat += bc[pt] * val[pt];
     }
 
-    QVector<int> whiteTook, blackTook;
-    int blackPawnsLost = qMax(0, (init[0] - bc[0]) - promoB);
-    int whitePawnsLost = qMax(0, (init[0] - wc[0]) - promoW);
-    for (int k = 0; k < blackPawnsLost; ++k) whiteTook.append(6);
-    for (int k = 0; k < whitePawnsLost; ++k) blackTook.append(0);
-    for (int pt = 1; pt < 5; ++pt) {
-        for (int k = 0; k < qMax(0, init[pt] - bc[pt]); ++k) whiteTook.append(6 + pt);
-        for (int k = 0; k < qMax(0, init[pt] - wc[pt]); ++k) blackTook.append(pt);
-    }
-
     int diff = whiteMat - blackMat;
-    m_panel->setCaptured(whiteTook, diff > 0 ? diff : 0, blackTook, diff < 0 ? -diff : 0);
+    m_panel->setCaptured(m_game->capturedBy(0), diff > 0 ? diff : 0,
+                         m_game->capturedBy(1), diff < 0 ? -diff : 0);
 }

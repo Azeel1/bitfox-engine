@@ -19,6 +19,7 @@ public:
     explicit SidePanel(QWidget *parent = nullptr);
 
     void setEngines(const QVector<EngineEntry> &engines);
+    void setEngineSelection(int color, const QString &path);
     void rebuildMoves(const QStringList &moves);
     void clearMoves();
     void setStatus(const QString &text);

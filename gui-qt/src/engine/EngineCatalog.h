@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 struct EngineEntry {
@@ -10,7 +11,7 @@ struct EngineEntry {
 
 class EngineCatalog {
 public:
-    static QVector<EngineEntry> discover();
+    static QVector<EngineEntry> discover(const QStringList &directories = {});
     static QVector<EngineEntry> scanDir(const QString &dir);
 
 private:

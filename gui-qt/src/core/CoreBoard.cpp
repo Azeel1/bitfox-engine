@@ -24,7 +24,7 @@ QString CoreBoard::fen() const {
 int CoreBoard::pieceAt(int square) const { return cc_piece_at(m_board, square); }
 
 QVector<int> CoreBoard::legalTo(int from) const {
-    int out[32];
+    int out[CC_SQUARE_TARGET_CAPACITY];
     int n = cc_legal_to(m_board, from, out);
     QVector<int> moves;
     moves.reserve(n);
@@ -35,7 +35,7 @@ QVector<int> CoreBoard::legalTo(int from) const {
 }
 
 QVector<int> CoreBoard::premoveTargets(int from) const {
-    int out[32];
+    int out[CC_SQUARE_TARGET_CAPACITY];
     int n = cc_premove_to(m_board, from, out);
     QVector<int> moves;
     moves.reserve(n);
@@ -58,12 +58,17 @@ int CoreBoard::status() const { return cc_status(m_board); }
 int CoreBoard::evaluate() const { return cc_evaluate(m_board); }
 
 bool CoreBoard::bestMove(int movetimeMs, int &from, int &to, int &promo) const {
-    CcSearchResult r;
-    cc_search(m_board, 0, movetimeMs, &r);
+    CcSearchResult r{};
+    if (cc_search_ex(m_board, 0, movetimeMs, &r) != CC_RESULT_OK || r.best == 0) {
+        from = -1;
+        to = -1;
+        promo = 0;
+        return false;
+    }
     from = r.best & 0x3f;
     to = (r.best >> 6) & 0x3f;
     promo = (r.best >> 12) & 0x7;
-    return from != to;
+    return true;
 }
 
 QString CoreBoard::squareName(int square) {

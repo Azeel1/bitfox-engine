@@ -8,7 +8,7 @@
 #include <QVBoxLayout>
 
 ReleasesDialog::ReleasesDialog(QWidget *parent) : QDialog(parent) {
-    setWindowTitle(tr("Bitfox versions"));
+    setWindowTitle(tr("Bitfox engine versions"));
     setMinimumSize(420, 360);
 
     auto *lay = new QVBoxLayout(this);
@@ -73,6 +73,16 @@ ReleasesDialog::ReleasesDialog(QWidget *parent) : QDialog(parent) {
                     reload();
                 } else {
                     m_status->setText(tr("Failed to install %1: %2").arg(tag, error));
+                    for (int i = 0; i < m_releases.size(); ++i) {
+                        if (m_releases[i].tag != tag) {
+                            continue;
+                        }
+                        QWidget *row = m_list->itemWidget(m_list->item(i));
+                        if (auto *button = row ? row->findChild<QPushButton *>() : nullptr) {
+                            button->setEnabled(true);
+                        }
+                        break;
+                    }
                 }
             });
 

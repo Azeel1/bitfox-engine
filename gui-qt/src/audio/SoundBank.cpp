@@ -16,7 +16,7 @@ SoundBank::SoundBank(QObject *parent) : QObject(parent) {
 void SoundBank::add(const QString &key, const QString &resource) {
     auto *effect = new QSoundEffect(this);
     effect->setSource(QUrl(resource));
-    effect->setVolume(0.6);
+    effect->setVolume(0.6f);
     m_effects.insert(key, effect);
 }
 

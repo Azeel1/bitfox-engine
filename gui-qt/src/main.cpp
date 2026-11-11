@@ -10,6 +10,7 @@ int main(int argc, char *argv[]) {
     QLocale::setDefault(QLocale(QLocale::English, QLocale::UnitedStates));
     app.setOrganizationName("Bitfox");
     app.setApplicationName("Bitfox");
+    app.setApplicationVersion(BITFOX_APP_VERSION);
     app.setStyle("Fusion");
 
     QPalette pal;
