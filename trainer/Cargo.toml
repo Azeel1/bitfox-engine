@@ -2,8 +2,10 @@
 name = "bitfox-trainer"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.96"
+license = "GPL-3.0-or-later"
 description = "NNUE training pipeline for the bitfox chess engine, built on Bullet"
-authors = ["Bitfox Team"]
+authors = ["Azeel"]
 
 [[bin]]
 name = "train"
@@ -15,7 +17,7 @@ metal = ["bullet_lib/metal"]
 cuda = ["bullet_lib/cuda"]
 
 [dependencies]
-bullet_lib = { git = "https://github.com/jw1912/bullet", branch = "main", default-features = false }
+bullet_lib = { git = "https://github.com/jw1912/bullet", rev = "ae9dd186af26d4a54518df5021ecde24e3ce8dc8", default-features = false }
 
 [profile.release]
 lto = "fat"

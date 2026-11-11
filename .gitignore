@@ -10,38 +10,51 @@
 **/target/
 **/*.rs.bk
 
-# GUI native build output
+# Qt / CMake / native builds
 /build/
+/gui-qt/build*/
+/dist/
+/android-app/
 
-# Neural nets (the active engine net is force-added; everything else stays out)
+# Networks (except engine/networks/bitfox.nnue)
 *.nnue
 /data/nnue/
 /networks/
 
-# Syzygy tablebases (downloaded separately, large)
+# Tablebases
 /data/syzygy/
 
-# Training data and checkpoints (large, generated)
+# Training data and checkpoints
 /trainer/data/
 /trainer/checkpoints/
 /trainer/runs/
 *.data
 /engine/data.txt
 
-# Local configs and scratch
+# Local configuration and scratch
 /config.json
 /engine/config.json
 image.png
 
+# Python
 __pycache__/
 *.pyc
 
+# Logs, profiles, and temporary outputs
 /tmp/
 cache/
 *.log
 *.tmp
 *.prof
 *.trace
-
-# SPSA tuner state
 /tools/spsa_theta.json
+
+# Credentials and keys
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+*.keystore

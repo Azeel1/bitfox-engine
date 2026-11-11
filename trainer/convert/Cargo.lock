@@ -7,6 +7,7 @@ name = "bitfox-convert"
 version = "0.1.0"
 dependencies = [
  "bulletformat",
+ "libc",
 ]
 
 [[package]]
@@ -14,3 +15,9 @@ name = "bulletformat"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d171953264e8dc3aa62757255e602e507fdd358a94e3cdacb9e481ff3a1c6b0"
+
+[[package]]
+name = "libc"
+version = "0.2.186"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66"

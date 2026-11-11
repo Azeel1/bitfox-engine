@@ -2,7 +2,7 @@
 name = "bitfox"
 version = "2.5.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.96"
 license = "GPL-3.0-or-later"
 
 [[bin]]
@@ -20,12 +20,24 @@ codegen-units = 1
 opt-level = 3
 panic = "abort"
 
+[profile.datagen]
+inherits = "release"
+panic = "unwind"
+
+[profile.release-test]
+inherits = "release"
+panic = "unwind"
+
 [profile.dev]
 opt-level = 1
 
 [dependencies]
+portable-atomic = "1"
 shakmaty = "0.30"
 shakmaty-syzygy = "0.28"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [features]
 stats = []
