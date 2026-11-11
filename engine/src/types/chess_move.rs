@@ -1,5 +1,11 @@
 use super::{PieceType, Square};
 
+const SQUARE_MASK: u16 = 0x3f;
+
+// 16-bit move encoding:
+//   bits [0..5]   : origin square (0..63)
+//   bits [6..11]  : target square (0..63)
+//   bits [12..15] : move flag (quiet, castle, capture, ep, promotion)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Move(u16);
 
@@ -38,12 +44,14 @@ impl Move {
 
     #[inline]
     pub const fn from(self) -> Square {
-        Square::new((self.0 & 0x3f) as u8)
+        let idx = self.0 & SQUARE_MASK;
+        Square::new(idx as u8)
     }
 
     #[inline]
     pub const fn to(self) -> Square {
-        Square::new(((self.0 >> 6) & 0x3f) as u8)
+        let idx = (self.0 >> 6) & SQUARE_MASK;
+        Square::new(idx as u8)
     }
 
     #[inline]

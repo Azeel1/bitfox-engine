@@ -48,11 +48,11 @@ impl Board {
             halfmove: self.halfmove,
             fullmove: self.fullmove,
             key: self.key,
+            repetition_start: self.repetition_start,
         });
 
-        self.key ^= zobrist::castling(self.castling.0);
-        if let Some(ep) = self.ep {
-            self.key ^= zobrist::en_passant(ep.file());
+        if let Some(file) = self.ep_hash_file(us) {
+            self.key ^= zobrist::en_passant(file);
         }
         self.ep = None;
 
@@ -80,7 +80,9 @@ impl Board {
                 Square::new(from.raw() - 8)
             };
             self.ep = Some(ep_sq);
-            self.key ^= zobrist::en_passant(ep_sq.file());
+            if let Some(file) = self.ep_hash_file(them) {
+                self.key ^= zobrist::en_passant(file);
+            }
         } else if m.is_castle() {
             let rook = Piece::new(us, PieceType::Rook);
             let (rfrom, rto) = rook_castle(to);
@@ -88,17 +90,20 @@ impl Board {
             self.put(rook, rto);
         }
 
+        let old_castling = self.castling.0;
         self.castling
             .retain(CASTLE_MASK[from.index()] & CASTLE_MASK[to.index()]);
-        self.key ^= zobrist::castling(self.castling.0);
+        if self.castling.0 != old_castling {
+            self.key ^= zobrist::castling(old_castling) ^ zobrist::castling(self.castling.0);
+        }
 
         if piece.piece_type() == PieceType::Pawn || m.is_capture() {
             self.halfmove = 0;
         } else {
-            self.halfmove += 1;
+            self.halfmove = self.halfmove.saturating_add(1);
         }
         if us == Color::Black {
-            self.fullmove += 1;
+            self.fullmove = self.fullmove.saturating_add(1);
         }
 
         self.side = them;
@@ -148,6 +153,7 @@ impl Board {
         self.halfmove = undo.halfmove;
         self.fullmove = undo.fullmove;
         self.key = undo.key;
+        self.repetition_start = undo.repetition_start;
     }
 
     pub fn make_null(&mut self) {
@@ -158,14 +164,16 @@ impl Board {
             halfmove: self.halfmove,
             fullmove: self.fullmove,
             key: self.key,
+            repetition_start: self.repetition_start,
         });
-        if let Some(ep) = self.ep {
-            self.key ^= zobrist::en_passant(ep.file());
+        if let Some(file) = self.ep_hash_file(self.side) {
+            self.key ^= zobrist::en_passant(file);
         }
         self.ep = None;
-        self.halfmove += 1;
+        self.halfmove = self.halfmove.saturating_add(1);
         self.side = self.side.flip();
         self.key ^= zobrist::side_toggle();
+        self.repetition_start = self.history.len();
         self.history.push(self.key);
     }
 
@@ -176,5 +184,69 @@ impl Board {
         self.ep = undo.ep;
         self.halfmove = undo.halfmove;
         self.key = undo.key;
+        self.repetition_start = undo.repetition_start;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn find(board: &mut Board, uci: &str) -> Move {
+        let legal = board.generate_legal();
+        legal
+            .as_slice()
+            .iter()
+            .copied()
+            .find(|m| m.to_uci() == uci)
+            .expect("legal test move")
+    }
+
+    #[test]
+    fn move_counters_saturate_and_unmake_restores_them() {
+        let fen = "4k3/8/8/8/8/8/8/4K3 w - - 65535 65535";
+        let mut board = Board::from_fen(fen).unwrap();
+        let mv = find(&mut board, "e1d1");
+        board.make_move(mv);
+        assert_eq!(board.halfmove, u16::MAX);
+        board.unmake_move(mv);
+        assert_eq!(board.to_fen(), fen);
+
+        let fen = "4k3/8/8/8/8/8/8/4K3 b - - 65535 65535";
+        let mut board = Board::from_fen(fen).unwrap();
+        let mv = find(&mut board, "e8d8");
+        board.make_move(mv);
+        assert_eq!(board.fullmove, u16::MAX);
+        board.unmake_move(mv);
+        assert_eq!(board.to_fen(), fen);
+    }
+
+    #[test]
+    fn double_push_hash_matches_a_fresh_position() {
+        let mut board = Board::from_fen("4k3/4p3/8/3P4/8/8/8/4K3 b - - 0 1").unwrap();
+        let mv = find(&mut board, "e7e5");
+        board.make_move(mv);
+        let fresh = Board::from_fen(&board.to_fen()).unwrap();
+        assert_eq!(board.key, fresh.key);
+        board.unmake_move(mv);
+    }
+
+    #[test]
+    fn null_move_clears_en_passant_and_restores_all_state() {
+        let mut board = Board::from_fen("4k3/8/8/3Pp3/8/8/8/4K3 w - e6 0 2").unwrap();
+        let before_fen = board.to_fen();
+        let before_key = board.key;
+        let before_history = board.history.clone();
+
+        board.make_null();
+        assert!(board.ep.is_none());
+        assert_eq!(board.halfmove, 1);
+        assert_eq!(board.side, Color::Black);
+        assert_eq!(board.key, Board::from_fen(&board.to_fen()).unwrap().key);
+
+        board.unmake_null();
+        assert_eq!(board.to_fen(), before_fen);
+        assert_eq!(board.key, before_key);
+        assert_eq!(board.history, before_history);
     }
 }

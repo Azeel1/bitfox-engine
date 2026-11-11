@@ -1,7 +1,9 @@
 mod magic;
+mod magic_numbers;
 
 pub use magic::{
-    bishop_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks, rook_attacks,
+    bishop_attacks, bishop_rook_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks,
+    rook_attacks, warmup,
 };
 
 use crate::board::Board;
@@ -75,11 +77,12 @@ impl Board {
         }
         let occ = self.occupancy();
         let bishops = self.pieces(by, PieceType::Bishop) | self.pieces(by, PieceType::Queen);
-        if (bishop_attacks(sq, occ) & bishops).any() {
+        let (diagonal, orthogonal) = bishop_rook_attacks(sq, occ);
+        if (diagonal & bishops).any() {
             return true;
         }
         let rooks = self.pieces(by, PieceType::Rook) | self.pieces(by, PieceType::Queen);
-        (rook_attacks(sq, occ) & rooks).any()
+        (orthogonal & rooks).any()
     }
 
     #[inline]
@@ -147,6 +150,7 @@ impl Board {
 
         for from in self.pieces(us, PieceType::Pawn) {
             let one = Square::new((from.raw() as i8 + forward) as u8);
+            let attacks = pawn_attacks(us, from);
             if !occ.contains(one) {
                 if one.rank() == promo_rank {
                     for &flag in &PROMO_PUSH {
@@ -163,7 +167,7 @@ impl Board {
                 }
             }
 
-            for to in pawn_attacks(us, from) & cap_targets {
+            for to in attacks & cap_targets {
                 if to.rank() == promo_rank {
                     for &flag in &PROMO_CAPTURE {
                         list.push(Move::new(from, to, flag));
@@ -174,7 +178,7 @@ impl Board {
             }
 
             if let Some(ep) = self.ep() {
-                if pawn_attacks(us, from).contains(ep) {
+                if attacks.contains(ep) {
                     list.push(Move::new(from, ep, Move::EN_PASSANT));
                 }
             }
@@ -302,12 +306,13 @@ impl Board {
 
         for from in self.pieces(us, PieceType::Pawn) {
             let one = Square::new((from.raw() as i8 + forward) as u8);
+            let attacks = pawn_attacks(us, from);
             if one.rank() == promo_rank && !occ.contains(one) {
                 for &flag in &PROMO_PUSH {
                     list.push(Move::new(from, one, flag));
                 }
             }
-            for to in pawn_attacks(us, from) & cap {
+            for to in attacks & cap {
                 if to.rank() == promo_rank {
                     for &flag in &PROMO_CAPTURE {
                         list.push(Move::new(from, to, flag));
@@ -317,7 +322,7 @@ impl Board {
                 }
             }
             if let Some(ep) = self.ep() {
-                if pawn_attacks(us, from).contains(ep) {
+                if attacks.contains(ep) {
                     list.push(Move::new(from, ep, Move::EN_PASSANT));
                 }
             }
@@ -345,6 +350,34 @@ impl Board {
         for to in king_attacks(self.king_sq(us)) & cap {
             list.push(Move::new(self.king_sq(us), to, Move::CAPTURE));
         }
+    }
+
+    pub(crate) fn has_legal_move(&mut self) -> bool {
+        let us = self.side();
+        let occ = self.occupancy();
+        let step = if us == Color::White { 8i8 } else { -8i8 };
+        for from in self.pieces(us, PieceType::Pawn) {
+            let to = Square::new((from.raw() as i8 + step) as u8);
+            if occ.contains(to) {
+                continue;
+            }
+            let next_occ = (occ & !from.bb()) | to.bb();
+            if (self.attackers_to(self.king_sq(us), next_occ) & self.color_bb(us.flip())).is_empty()
+            {
+                return true;
+            }
+        }
+        let mut pseudo = MoveList::new();
+        self.generate_pseudo(&mut pseudo);
+        for &m in pseudo.as_slice() {
+            self.make_move(m);
+            let legal = !self.is_attacked(self.king_sq(us), self.side());
+            self.unmake_move(m);
+            if legal {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn generate_legal(&mut self) -> MoveList {
@@ -385,4 +418,114 @@ impl Board {
 
 fn knight_attacks_wrap(sq: Square, _occ: Bitboard) -> Bitboard {
     knight_attacks(sq)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn ucis(list: &MoveList) -> Vec<String> {
+        list.as_slice().iter().map(|m| m.to_uci()).collect()
+    }
+
+    #[test]
+    fn pawn_push_existence_respects_pins_checks_and_promotions() {
+        let keys = |board: &Board| {
+            [
+                board.key(),
+                board.pawn_key(),
+                board.non_pawn_key(Color::White),
+                board.non_pawn_key(Color::Black),
+                board.minor_key(),
+                board.major_key(),
+            ]
+        };
+        for (fen, pawn_move, legal_push, has_move) in [
+            ("8/8/8/8/2bb4/8/1Pk5/K7 w - - 0 1", "b2b3", false, false),
+            ("k7/1pK5/8/2BB4/8/8/8/8 b - - 0 1", "b7b6", false, false),
+            ("4r2k/8/8/8/8/8/4P3/4K3 w - - 0 1", "e2e3", true, true),
+            ("7k/8/8/1b6/8/8/3P4/5K2 w - - 0 1", "d2d3", true, true),
+            ("K6r/1Pk5/8/2b5/8/8/8/8 w - - 0 1", "b7b8q", true, true),
+            ("8/8/8/8/2B5/8/1pK5/k6R b - - 0 1", "b2b1q", true, true),
+            ("7k/p5Q1/5K2/8/8/8/8/8 b - - 0 1", "a7a6", false, false),
+        ] {
+            let mut board = Board::from_fen(fen).unwrap();
+            let before_fen = board.to_fen();
+            let before_keys = keys(&board);
+            let legal = ucis(&board.generate_legal());
+            assert_eq!(legal.iter().any(|m| m == pawn_move), legal_push, "{fen}");
+            assert_eq!(!legal.is_empty(), has_move, "{fen}");
+            for _ in 0..2 {
+                assert_eq!(board.has_legal_move(), has_move, "{fen}");
+                assert_eq!(board.to_fen(), before_fen, "{fen}");
+                assert_eq!(keys(&board), before_keys, "{fen}");
+                assert_eq!(ucis(&board.generate_legal()), legal, "{fen}");
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_fast_move_existence_matches_full_generation() {
+        for fen in [
+            Board::START_FEN,
+            "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",
+            "7k/6Q1/5K2/8/8/8/8/8 b - - 100 1",
+            "4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+            "4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1",
+            "7k/P7/8/8/8/8/8/K7 w - - 0 1",
+            "r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1",
+            "r4k2/8/8/8/8/8/7Q/K7 w - - 96 1",
+        ] {
+            let mut board = Board::from_fen(fen).unwrap();
+            let before_fen = board.to_fen();
+            let before_key = board.key();
+            let expected = !board.generate_legal().is_empty();
+            assert_eq!(board.has_legal_move(), expected, "{fen}");
+            assert_eq!(board.to_fen(), before_fen);
+            assert_eq!(board.key(), before_key);
+            assert_eq!(board.has_legal_move(), expected, "repeated {fen}");
+        }
+    }
+
+    #[test]
+    fn legal_generation_restores_the_board() {
+        let mut board = Board::startpos();
+        let fen = board.to_fen();
+        let key = board.key();
+        let first = ucis(&board.generate_legal());
+        let second = ucis(&board.generate_legal());
+        assert_eq!(first, second);
+        assert_eq!(board.to_fen(), fen);
+        assert_eq!(board.key(), key);
+    }
+
+    #[test]
+    fn pinned_en_passant_is_not_legal() {
+        let mut board = Board::from_fen("4r1k1/8/8/3pP3/8/8/8/4K3 w - d6 0 1").unwrap();
+        let mut pseudo = MoveList::new();
+        board.generate_pseudo(&mut pseudo);
+        assert!(ucis(&pseudo).iter().any(|m| m == "e5d6"));
+        assert!(!ucis(&board.generate_legal()).iter().any(|m| m == "e5d6"));
+    }
+
+    #[test]
+    fn castling_through_an_attacked_square_is_not_generated() {
+        let board = Board::from_fen("4kr2/8/8/8/8/8/8/R3K2R w KQ - 0 1").unwrap();
+        let mut pseudo = MoveList::new();
+        board.generate_pseudo(&mut pseudo);
+        let moves = ucis(&pseudo);
+        assert!(!moves.iter().any(|m| m == "e1g1"));
+        assert!(moves.iter().any(|m| m == "e1c1"));
+    }
+
+    #[test]
+    fn moves_never_capture_the_enemy_king() {
+        let mut board = Board::from_fen("8/8/8/8/8/4k3/8/4K3 w - - 0 1").unwrap();
+        let king = crate::types::Piece::new(Color::Black, PieceType::King);
+        board.remove(king, Square::new(20));
+        board.put(king, Square::new(12));
+        let mut pseudo = MoveList::new();
+        board.generate_pseudo(&mut pseudo);
+        assert!(!ucis(&pseudo).iter().any(|m| m == "e1e2"));
+    }
 }

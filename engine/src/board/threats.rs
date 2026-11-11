@@ -1,6 +1,7 @@
 use super::Board;
 use crate::movegen::{
-    bishop_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks, rook_attacks,
+    bishop_attacks, bishop_rook_attacks, king_attacks, knight_attacks, pawn_attacks, queen_attacks,
+    rook_attacks,
 };
 use crate::types::{Bitboard, Color, PieceType};
 
@@ -43,10 +44,7 @@ impl Board {
         let them = self.side().flip();
         let occ = self.occupancy();
 
-        let mut pawn = Bitboard::EMPTY;
-        for from in self.pieces(them, PieceType::Pawn) {
-            pawn |= pawn_attacks(them, from);
-        }
+        let pawn = pawn_threats(them, self.pieces(them, PieceType::Pawn));
         let mut knight = Bitboard::EMPTY;
         for from in self.pieces(them, PieceType::Knight) {
             knight |= knight_attacks(from);
@@ -71,12 +69,13 @@ impl Board {
         let threatened = [Bitboard::EMPTY, pawn, pawn, minor, rook_th, Bitboard::EMPTY];
 
         let eksq = self.king_sq(them);
+        let (bishop_check, rook_check) = bishop_rook_attacks(eksq, occ);
         let check = [
             pawn_attacks(them, eksq),
             knight_attacks(eksq),
-            bishop_attacks(eksq, occ),
-            rook_attacks(eksq, occ),
-            queen_attacks(eksq, occ),
+            bishop_check,
+            rook_check,
+            bishop_check | rook_check,
             Bitboard::EMPTY,
         ];
 
@@ -88,10 +87,29 @@ impl Board {
     }
 }
 
+#[inline]
+fn pawn_threats(color: Color, pawns: Bitboard) -> Bitboard {
+    let (left, right) = if color == Color::White {
+        (
+            (pawns.0 & !Bitboard::FILE_H.0) << 9,
+            (pawns.0 & !Bitboard::FILE_A.0) << 7,
+        )
+    } else {
+        (
+            (pawns.0 & !Bitboard::FILE_H.0) >> 7,
+            (pawns.0 & !Bitboard::FILE_A.0) >> 9,
+        )
+    };
+    Bitboard(left | right)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::board::Board;
-    use crate::types::{Color, Square};
+    use crate::movegen::pawn_attacks;
+    use crate::types::{Bitboard, Color, Square};
+
+    use super::pawn_threats;
 
     fn sq(s: &str) -> Square {
         Square::from_str(s).unwrap()
@@ -124,6 +142,18 @@ mod tests {
     }
 
     #[test]
+    fn context_all_matches_the_full_threat_map() {
+        for fen in [
+            Board::START_FEN,
+            "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+            "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 b - - 0 1",
+        ] {
+            let board = Board::from_fen(fen).unwrap();
+            assert_eq!(board.threat_ctx().all, board.all_threats());
+        }
+    }
+
+    #[test]
     fn slider_threats() {
         let board = Board::from_fen("4k3/8/8/8/3Q4/8/8/4K3 w - - 0 1").unwrap();
         let white = board.threats(Color::White);
@@ -148,5 +178,19 @@ mod tests {
         assert!(white.contains(sq("a3")));
         assert!(white.contains(sq("c3")));
         assert!(!white.contains(sq("b3")));
+    }
+
+    #[test]
+    fn pawn_threat_map_matches_square_attacks() {
+        for color in [Color::White, Color::Black] {
+            for raw in 0..64 {
+                let pawns = Bitboard(1u64 << raw);
+                let mut expected = Bitboard::EMPTY;
+                for from in pawns {
+                    expected |= pawn_attacks(color, from);
+                }
+                assert_eq!(pawn_threats(color, pawns), expected);
+            }
+        }
     }
 }

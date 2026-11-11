@@ -12,13 +12,13 @@ pub enum PieceType {
 }
 
 impl PieceType {
-    pub const ALL: [PieceType; 6] = [
-        PieceType::Pawn,
-        PieceType::Knight,
-        PieceType::Bishop,
-        PieceType::Rook,
-        PieceType::Queen,
-        PieceType::King,
+    pub const ALL: [Self; 6] = [
+        Self::Pawn,
+        Self::Knight,
+        Self::Bishop,
+        Self::Rook,
+        Self::Queen,
+        Self::King,
     ];
 
     #[inline]

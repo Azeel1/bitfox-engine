@@ -16,22 +16,70 @@ impl Magic {
 }
 
 struct Tables {
-    knight: [u64; 64],
-    king: [u64; 64],
-    pawn: [[u64; 64]; 2],
     rook: Vec<Magic>,
     bishop: Vec<Magic>,
 }
 
 static TABLES: OnceLock<Tables> = OnceLock::new();
 
+struct LeaperTables {
+    knight: [u64; 64],
+    king: [u64; 64],
+    pawn: [[u64; 64]; 2],
+}
+
+impl LeaperTables {
+    const fn generate() -> LeaperTables {
+        const NOT_A: u64 = !0x0101_0101_0101_0101;
+        const NOT_H: u64 = !0x8080_8080_8080_8080;
+        const NOT_AB: u64 = !0x0303_0303_0303_0303;
+        const NOT_GH: u64 = !0xc0c0_c0c0_c0c0_c0c0;
+
+        let mut knight = [0u64; 64];
+        let mut king = [0u64; 64];
+        let mut pawn = [[0u64; 64]; 2];
+        let mut sq = 0;
+        while sq < 64 {
+            let b = 1u64 << sq;
+            knight[sq] = ((b << 17) & NOT_A)
+                | ((b << 15) & NOT_H)
+                | ((b << 10) & NOT_AB)
+                | ((b << 6) & NOT_GH)
+                | ((b >> 17) & NOT_H)
+                | ((b >> 15) & NOT_A)
+                | ((b >> 10) & NOT_GH)
+                | ((b >> 6) & NOT_AB);
+
+            let mut kg = b | ((b & NOT_A) >> 1) | ((b & NOT_H) << 1);
+            let row = kg;
+            kg |= row << 8;
+            kg |= row >> 8;
+            king[sq] = kg & !b;
+
+            pawn[0][sq] = ((b & NOT_A) << 7) | ((b & NOT_H) << 9);
+            pawn[1][sq] = ((b & NOT_H) >> 7) | ((b & NOT_A) >> 9);
+            sq += 1;
+        }
+
+        LeaperTables { knight, king, pawn }
+    }
+}
+
+static LEAPERS: LeaperTables = LeaperTables::generate();
+
 #[inline]
 fn tables() -> &'static Tables {
     TABLES.get_or_init(Tables::generate)
 }
 
+pub fn warmup() {
+    let _ = tables();
+}
+
+#[cfg(test)]
 struct Prng(u64);
 
+#[cfg(test)]
 impl Prng {
     fn next(&mut self) -> u64 {
         self.0 = self.0.wrapping_add(0x9e37_79b9_7f4a_7c15);
@@ -39,10 +87,6 @@ impl Prng {
         z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
         z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
         z ^ (z >> 31)
-    }
-
-    fn sparse(&mut self) -> u64 {
-        self.next() & self.next() & self.next()
     }
 }
 
@@ -87,123 +131,60 @@ fn relevant_mask(sq: usize, rook: bool) -> u64 {
     full & !edges
 }
 
-fn build_magic(prng: &mut Prng, sq: usize, rook: bool) -> Magic {
+fn build_magic(sq: usize, rook: bool, magic: u64) -> Magic {
     let dirs = if rook { &ROOK_DIRS } else { &BISHOP_DIRS };
     let mask = relevant_mask(sq, rook);
     let bits = mask.count_ones();
     let size = 1usize << bits;
     let shift = 64 - bits;
-
-    let mut occupancies = Vec::with_capacity(size);
-    let mut references = Vec::with_capacity(size);
+    let mut table = vec![0u64; size];
+    let mut occupied = vec![false; size];
     let mut occ = 0u64;
     loop {
-        occupancies.push(occ);
-        references.push(slider_scan(sq, occ, dirs));
+        let index = (occ.wrapping_mul(magic) >> shift) as usize;
+        let attacks = slider_scan(sq, occ, dirs);
+        assert!(!occupied[index] || table[index] == attacks);
+        table[index] = attacks;
+        occupied[index] = true;
         occ = occ.wrapping_sub(mask) & mask;
         if occ == 0 {
             break;
         }
     }
-
-    let mut table = vec![0u64; size];
-    let mut used = vec![0u32; size];
-    let mut stamp = 0u32;
-    loop {
-        let magic = prng.sparse();
-        if (mask.wrapping_mul(magic) >> 56).count_ones() < 6 {
-            continue;
-        }
-        stamp += 1;
-        let mut ok = true;
-        for i in 0..occupancies.len() {
-            let idx = ((occupancies[i].wrapping_mul(magic)) >> shift) as usize;
-            if used[idx] != stamp {
-                used[idx] = stamp;
-                table[idx] = references[i];
-            } else if table[idx] != references[i] {
-                ok = false;
-                break;
-            }
-        }
-        if ok {
-            return Magic {
-                mask,
-                magic,
-                shift,
-                attacks: table.into_boxed_slice(),
-            };
-        }
+    Magic {
+        mask,
+        magic,
+        shift,
+        attacks: table.into_boxed_slice(),
     }
 }
 
 impl Tables {
     fn generate() -> Tables {
-        let mut knight = [0u64; 64];
-        let mut king = [0u64; 64];
-        let mut pawn = [[0u64; 64]; 2];
-
-        const NOT_A: u64 = !0x0101_0101_0101_0101;
-        const NOT_H: u64 = !0x8080_8080_8080_8080;
-        const NOT_AB: u64 = !0x0303_0303_0303_0303;
-        const NOT_GH: u64 = !0xc0c0_c0c0_c0c0_c0c0;
-
-        for sq in 0..64 {
-            let b = 1u64 << sq;
-            let mut k = 0u64;
-            k |= (b << 17) & NOT_A;
-            k |= (b << 15) & NOT_H;
-            k |= (b << 10) & NOT_AB;
-            k |= (b << 6) & NOT_GH;
-            k |= (b >> 17) & NOT_H;
-            k |= (b >> 15) & NOT_A;
-            k |= (b >> 10) & NOT_GH;
-            k |= (b >> 6) & NOT_AB;
-            knight[sq] = k;
-
-            let mut kg = b;
-            kg |= (b & NOT_A) >> 1;
-            kg |= (b & NOT_H) << 1;
-            let row = kg;
-            kg |= row << 8;
-            kg |= row >> 8;
-            king[sq] = kg & !b;
-
-            pawn[0][sq] = ((b & NOT_A) << 7) | ((b & NOT_H) << 9);
-            pawn[1][sq] = ((b & NOT_H) >> 7) | ((b & NOT_A) >> 9);
-        }
-
-        let mut prng = Prng(0x9e37_79b9_7f4a_7c15);
         let mut rook = Vec::with_capacity(64);
         let mut bishop = Vec::with_capacity(64);
         for sq in 0..64 {
-            rook.push(build_magic(&mut prng, sq, true));
-            bishop.push(build_magic(&mut prng, sq, false));
+            rook.push(build_magic(sq, true, super::magic_numbers::ROOK[sq]));
+            bishop.push(build_magic(sq, false, super::magic_numbers::BISHOP[sq]));
         }
 
-        Tables {
-            knight,
-            king,
-            pawn,
-            rook,
-            bishop,
-        }
+        Tables { rook, bishop }
     }
 }
 
 #[inline]
 pub fn knight_attacks(sq: Square) -> Bitboard {
-    Bitboard(tables().knight[sq.index()])
+    Bitboard(LEAPERS.knight[sq.index()])
 }
 
 #[inline]
 pub fn king_attacks(sq: Square) -> Bitboard {
-    Bitboard(tables().king[sq.index()])
+    Bitboard(LEAPERS.king[sq.index()])
 }
 
 #[inline]
 pub fn pawn_attacks(color: Color, sq: Square) -> Bitboard {
-    Bitboard(tables().pawn[color.index()][sq.index()])
+    Bitboard(LEAPERS.pawn[color.index()][sq.index()])
 }
 
 #[inline]
@@ -218,7 +199,88 @@ pub fn bishop_attacks(sq: Square, occ: Bitboard) -> Bitboard {
     Bitboard(m.attacks[m.index(occ.0)])
 }
 
+#[inline(always)]
+pub fn bishop_rook_attacks(sq: Square, occ: Bitboard) -> (Bitboard, Bitboard) {
+    let tables = tables();
+    let bishop = &tables.bishop[sq.index()];
+    let rook = &tables.rook[sq.index()];
+    (
+        Bitboard(bishop.attacks[bishop.index(occ.0)]),
+        Bitboard(rook.attacks[rook.index(occ.0)]),
+    )
+}
+
 #[inline]
 pub fn queen_attacks(sq: Square, occ: Bitboard) -> Bitboard {
-    rook_attacks(sq, occ) | bishop_attacks(sq, occ)
+    let (bishop, rook) = bishop_rook_attacks(sq, occ);
+    bishop | rook
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_slider_occupancy_matches_ray_scans() {
+        for rook in [false, true] {
+            let directions = if rook { &ROOK_DIRS } else { &BISHOP_DIRS };
+            for raw in 0..64 {
+                let sq = Square::new(raw);
+                let mask = relevant_mask(raw as usize, rook);
+                let mut occ = 0;
+                loop {
+                    let actual = if rook {
+                        rook_attacks(sq, Bitboard(occ))
+                    } else {
+                        bishop_attacks(sq, Bitboard(occ))
+                    };
+                    assert_eq!(actual.0, slider_scan(raw as usize, occ, directions));
+                    occ = occ.wrapping_sub(mask) & mask;
+                    if occ == 0 {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn magic_attacks_match_ray_scans() {
+        let mut rng = Prng(0x1234_5678_9abc_def0);
+        for raw in 0..64 {
+            let sq = Square::new(raw);
+            for _ in 0..256 {
+                let occ = Bitboard(rng.next());
+                assert_eq!(
+                    rook_attacks(sq, occ),
+                    Bitboard(slider_scan(raw as usize, occ.0, &ROOK_DIRS))
+                );
+                assert_eq!(
+                    bishop_attacks(sq, occ),
+                    Bitboard(slider_scan(raw as usize, occ.0, &BISHOP_DIRS))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn combined_slider_lookup_matches_individual_lookups() {
+        let mut rng = Prng(0xfedc_ba98_7654_3210);
+        for raw in 0..64 {
+            let sq = Square::new(raw);
+            let occ = Bitboard(rng.next());
+            let (bishop, rook) = bishop_rook_attacks(sq, occ);
+            assert_eq!(bishop, bishop_attacks(sq, occ));
+            assert_eq!(rook, rook_attacks(sq, occ));
+            assert_eq!(bishop | rook, queen_attacks(sq, occ));
+        }
+    }
+
+    #[test]
+    fn warmup_is_idempotent() {
+        warmup();
+        let first = tables() as *const Tables;
+        warmup();
+        assert_eq!(first, tables() as *const Tables);
+    }
 }

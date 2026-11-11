@@ -13,4 +13,5 @@ pub mod uci;
 pub use constants::*;
 pub use types::{
     is_decisive, is_loss, is_win, mate_in, mated_in, DRAW, INFINITY, MATE, MATE_IN_MAX, SCORE_NONE,
+    TB_WIN, TB_WIN_IN_MAX,
 };
