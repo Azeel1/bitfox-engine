@@ -72,6 +72,7 @@ jobs:
             'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu jammy main universe restricted multiverse' \
             'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://archive.ubuntu.com/ubuntu jammy-updates main universe restricted multiverse' \
             'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] https://security.ubuntu.com/ubuntu jammy-security main universe restricted multiverse' \
+            'deb-src [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg check-valid-until=no] https://snapshot.ubuntu.com/ubuntu/20261101T000000Z jammy-security main' \
             | sudo tee /etc/apt/sources.list.d/bitfox-reviewed-sources.list >/dev/null
           sudo apt-get update \
             -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/bitfox-reviewed-sources.list \
